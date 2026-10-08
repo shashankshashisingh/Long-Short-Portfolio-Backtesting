@@ -56,6 +56,7 @@
   .wordmark small { font-family: var(--font-mono); font-size: 12.5px; font-weight: 400; color: var(--ink-faint); margin-left: 12px; letter-spacing: 0; }
   .tagline { color: var(--ink-soft); font-size: 14px; max-width: 64ch; margin: 4px 0 24px; }
   .gear-btn { background: none; border: 1px solid var(--line); color: var(--ink-soft); border-radius: var(--radius); padding: 7px 12px; font-size: 13px; font-family: inherit; cursor: pointer; }
+  .top-btns { display: flex; gap: 8px; flex-wrap: wrap; }
   .gear-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
 
   .hero { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-bottom: 26px; background: var(--card); }
@@ -185,7 +186,7 @@
 
   <header class="top">
     <h1 class="wordmark"><span class="l">Ten</span><small id="asOfLabel"></small></h1>
-    <button class="gear-btn" id="openSettings">Strategy &amp; settings</button>
+    <div class="top-btns"><button class="gear-btn" id="themeBtn" type="button" aria-label="Switch colour theme">Dark mode</button><button class="gear-btn" id="openSettings">Strategy &amp; settings</button></div>
   </header>
   <p class="tagline">Ranks the companies in your monthly sheet on one metric you choose (PEG, PE, ROE or any other column), goes long the best ten and short the worst ten, equally weighted on each side, and tells you exactly which trades to make each month.</p>
 
@@ -1301,6 +1302,23 @@ async function init(){
   await loadState();
   renderAll();
 }
+/* theme: follows the device until the toggle is used, then remembers the choice in this browser */
+function currentTheme(){
+  var t = document.documentElement.getAttribute("data-theme");
+  if (t === "dark" || t === "light") return t;
+  return (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+}
+function paintThemeBtn(){ $("themeBtn").textContent = currentTheme() === "dark" ? "Light mode" : "Dark mode"; }
+(function(){
+  try { var saved = localStorage.getItem("ten_theme"); if (saved === "dark" || saved === "light") document.documentElement.setAttribute("data-theme", saved); } catch (e) {}
+  paintThemeBtn();
+  $("themeBtn").onclick = function(){
+    var next = currentTheme() === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("ten_theme", next); } catch (e) {}
+    paintThemeBtn();
+  };
+})();
 /*BOOT*/ init();
 
 })();
