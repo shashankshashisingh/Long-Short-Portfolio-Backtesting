@@ -1,0 +1,1309 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Ten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* Layout: one column. Summary strip, then the monthly workflow (upload, rank, preview trades),
+     then the two books (long above short), statistics, ledger, monthly runs. */
+  :root {
+    --paper: #EDF0E8;
+    --paper-2: #E1E6DA;
+    --card: #F6F8F2;
+    --ink: #1B2118;
+    --ink-soft: #545E4D;
+    --ink-faint: #81877A;
+    --line: #C9D0BF;
+    --long: #2F5A2B;
+    --long-soft: #E5EEDD;
+    --short: #2D5C85;
+    --short-soft: #DFEAF3;
+    --gain: #2F6B2A;
+    --loss: #8E3A2D;
+    --loss-soft: #F3E6E1;
+    --flag: #8F6C17;
+    --flag-soft: #F1EAD3;
+    --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+    --radius: 3px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #13160F; --paper-2: #1B1F14; --card: #181B12; --ink: #E9ECE0; --ink-soft: #A9AF9B; --ink-faint: #737A66;
+      --line: #32362A; --long: #8DBA7E; --long-soft: #1F2A1B; --short: #86B2DA; --short-soft: #182632;
+      --gain: #8DC27E; --loss: #D98B7B; --loss-soft: #2B1E1A; --flag: #D9B457; --flag-soft: #2A2413;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #13160F; --paper-2: #1B1F14; --card: #181B12; --ink: #E9ECE0; --ink-soft: #A9AF9B; --ink-faint: #737A66;
+    --line: #32362A; --long: #8DBA7E; --long-soft: #1F2A1B; --short: #86B2DA; --short-soft: #182632;
+    --gain: #8DC27E; --loss: #D98B7B; --loss-soft: #2B1E1A; --flag: #D9B457; --flag-soft: #2A2413;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding-block: 28px 80px; padding-inline: 20px; }
+  a { color: var(--long); }
+
+  header.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+  .wordmark { font-family: var(--font-display); font-weight: 600; font-size: 30px; letter-spacing: -0.01em; margin: 0; }
+  .wordmark .l { color: var(--long); }
+  .wordmark .s { color: var(--short); }
+  .wordmark .amp { color: var(--ink-faint); font-weight: 400; margin: 0 2px; }
+  .wordmark small { font-family: var(--font-mono); font-size: 12.5px; font-weight: 400; color: var(--ink-faint); margin-left: 12px; letter-spacing: 0; }
+  .tagline { color: var(--ink-soft); font-size: 14px; max-width: 64ch; margin: 4px 0 24px; }
+  .gear-btn { background: none; border: 1px solid var(--line); color: var(--ink-soft); border-radius: var(--radius); padding: 7px 12px; font-size: 13px; font-family: inherit; cursor: pointer; }
+  .gear-btn:hover { border-color: var(--ink-faint); color: var(--ink); }
+
+  .hero { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-bottom: 26px; background: var(--card); }
+  .hero .stat { padding: 16px 18px; border-right: 1px solid var(--line); min-width: 0; }
+  .hero .stat:last-child { border-right: none; }
+  .label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); margin-bottom: 6px; }
+  .hero .value { font-family: var(--font-display); font-size: 23px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .hero .value.small { font-size: 15px; line-height: 1.35; }
+  .hero .sub2 { font-family: var(--font-body); font-size: 12px; color: var(--ink-faint); margin-top: 2px; }
+  .pos { color: var(--gain); }
+  .neg { color: var(--loss); }
+  @media (max-width: 680px) { .hero { grid-template-columns: 1fr 1fr; } .hero .stat:nth-child(2) { border-right: none; } .hero .stat:nth-child(-n+2) { border-bottom: 1px solid var(--line); } }
+
+  section.card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); padding: 20px 22px; margin-bottom: 20px; }
+  section.card h2 { font-family: var(--font-display); font-weight: 500; font-size: 19px; margin: 0 0 4px; text-wrap: balance; }
+  section.card .sub { color: var(--ink-soft); font-size: 13.5px; margin: 0 0 16px; max-width: 64ch; }
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .empty-note { color: var(--ink-faint); font-size: 13.5px; padding: 6px 0; }
+  h3.step { font-family: var(--font-display); font-weight: 500; font-size: 15.5px; margin: 18px 0 8px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dot.long { background: var(--long); }
+  .dot.short { background: var(--short); }
+
+  .dropzone { border: 1px dashed var(--ink-faint); border-radius: var(--radius); padding: 26px 20px; text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  .dropzone:hover, .dropzone.drag, .dropzone:focus-visible { border-color: var(--long); background: var(--long-soft); outline: none; }
+  .dropzone .dz-title { font-weight: 500; margin-bottom: 3px; }
+  .dropzone .dz-sub { font-size: 12.5px; color: var(--ink-faint); }
+  input[type=file] { display: none; }
+  .sample-row { margin-top: 10px; font-size: 13px; color: var(--ink-faint); }
+
+  button.btn { font-family: var(--font-body); font-size: 13.5px; font-weight: 500; border-radius: var(--radius); padding: 9px 16px; cursor: pointer; border: 1px solid var(--long); background: var(--long); color: var(--paper); }
+  button.btn:hover { opacity: 0.9; }
+  button.btn.secondary { background: transparent; color: var(--ink); border-color: var(--line); }
+  button.btn.secondary:hover { border-color: var(--ink-faint); }
+  button.btn.danger { background: transparent; color: var(--loss); border-color: var(--loss); }
+  button.btn.danger:hover { background: var(--loss-soft); }
+  button.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.btn.inline { padding: 6px 12px; font-size: 12.5px; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--long); outline-offset: 1px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .toggle-link { background: none; border: none; color: var(--long); font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+  label.field { display: block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 5px; }
+  select, input[type=text], input[type=number], input[type=date] { width: 100%; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .grid-2 > *, .grid-4 > * { min-width: 0; }
+  @media (max-width: 680px) { .grid-4 { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 420px) { .grid-2, .grid-4 { grid-template-columns: 1fr; } }
+  .field-wrap { margin-bottom: 14px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; padding-top: 24px; grid-column: span 3; }
+  .check input { width: auto; flex: none; }
+  .check small { color: var(--ink-faint); }
+  @media (max-width: 680px) { .check { padding-top: 0; grid-column: 1 / -1; } }
+
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 620px; }
+  thead th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); font-weight: 500; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--paper-2); white-space: nowrap; }
+  tbody td { padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.sel-long { background: var(--long-soft); }
+  tbody tr.sel-short { background: var(--short-soft); }
+  tbody tr.pending-row { background: var(--flag-soft); }
+  td.name, th.name { white-space: normal; font-variant-numeric: normal; min-width: 140px; }
+  .rank { color: var(--ink-faint); font-family: var(--font-mono); font-size: 12px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 500; letter-spacing: 0.02em; }
+  .tag.buy { background: var(--long-soft); color: var(--long); }
+  .tag.sell { background: var(--loss-soft); color: var(--loss); }
+  .tag.short { background: var(--short-soft); color: var(--short); }
+  .tag.cover { background: var(--paper-2); color: var(--short); border: 1px solid var(--short); }
+  .tag.hold, .tag.manual { background: var(--paper-2); color: var(--ink-soft); }
+  .tag.fail { background: var(--paper-2); color: var(--ink-faint); }
+  .tag.longside { background: var(--long-soft); color: var(--long); }
+  .tag.shortside { background: var(--short-soft); color: var(--short); }
+  .badge-pending { display: inline-block; background: var(--flag-soft); color: var(--flag); border: 1px solid var(--flag); font-size: 10.5px; padding: 1px 7px; border-radius: 20px; margin-left: 7px; font-weight: 500; white-space: nowrap; }
+  .reason { color: var(--ink-faint); font-size: 12.5px; white-space: normal; min-width: 180px; }
+
+  .book { margin-top: 6px; }
+  .book + .book { margin-top: 22px; }
+  .book-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .book-title { font-family: var(--font-display); font-size: 16px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .book-sum { font-size: 12.5px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--line); gap: 1px; }
+  .stats-grid .stat { padding: 14px 17px; background: var(--card); min-width: 0; }
+  .stats-grid .value { font-family: var(--font-display); font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .stats-grid .sub2 { font-size: 11.5px; color: var(--ink-faint); margin-top: 3px; font-family: var(--font-body); }
+  @media (max-width: 680px) { .stats-grid { grid-template-columns: 1fr 1fr; } .stats-grid .stat:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+  .stat-note { font-size: 12.5px; color: var(--ink-faint); margin-top: 12px; }
+
+  .banner { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; font-size: 13px; margin-bottom: 14px; color: var(--ink-soft); background: var(--paper-2); }
+  .banner.warn { border-color: var(--flag); background: var(--flag-soft); color: var(--flag); }
+  .banner.bad { border-color: var(--loss); background: var(--loss-soft); color: var(--loss); }
+  .banner strong { font-weight: 600; }
+
+  .toast { position: fixed; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); max-width: calc(100vw - 32px); background: var(--ink); color: var(--paper); font-size: 13.5px; padding: 10px 18px; border-radius: var(--radius); opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 50; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; z-index: 40; }
+  .overlay.show { display: flex; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); max-width: 540px; width: 100%; padding: 24px; }
+  .panel h3 { font-family: var(--font-display); font-size: 18px; font-weight: 500; margin: 0 0 4px; }
+  .panel .sub { color: var(--ink-soft); font-size: 13px; margin: 0 0 18px; }
+  .panel .close-row { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+
+  .charges-box { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; margin: 4px 0 14px; background: var(--paper-2); }
+  .charges-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+  .charges-title { font-weight: 500; font-size: 14px; margin-bottom: 2px; }
+  .charges-hint { font-size: 12.5px; color: var(--ink-soft); max-width: 44ch; }
+  button.switch { display: inline-flex; align-items: center; gap: 8px; background: none; border: none; padding: 2px 0; cursor: pointer; font-family: inherit; font-size: 13px; color: var(--ink-soft); flex: none; }
+  button.switch .track { width: 38px; height: 22px; border-radius: 11px; background: var(--ink-faint); position: relative; transition: background .15s; flex: none; }
+  button.switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--card); transition: transform .15s; }
+  button.switch[aria-checked="true"] .track { background: var(--long); }
+  button.switch[aria-checked="true"] .track::after { transform: translateX(16px); }
+  button.switch .state { min-width: 22px; text-align: left; color: var(--ink); font-weight: 500; }
+  fieldset.charge-fields { border: 0; padding: 0; margin: 14px 0 0; min-width: 0; }
+  fieldset.charge-fields:disabled { opacity: 0.5; }
+  .charge-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) minmax(0, 110px); gap: 10px; align-items: end; margin-bottom: 10px; }
+  .charge-row .name { font-size: 13px; color: var(--ink); padding-bottom: 9px; }
+  .charge-example { font-size: 12.5px; color: var(--ink-soft); margin: 4px 0 0; min-height: 1.4em; }
+  @media (max-width: 480px) { .charge-row { grid-template-columns: 1fr 1fr; } .charge-row .name { grid-column: 1 / -1; padding-bottom: 0; } }
+  footer.foot { color: var(--ink-faint); font-size: 12px; text-align: center; margin-top: 36px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <h1 class="wordmark"><span class="l">Ten</span><small id="asOfLabel"></small></h1>
+    <button class="gear-btn" id="openSettings">Strategy &amp; settings</button>
+  </header>
+  <p class="tagline">Ranks the companies in your monthly sheet on one metric you choose (PEG, PE, ROE or any other column), goes long the best ten and short the worst ten, equally weighted on each side, and tells you exactly which trades to make each month.</p>
+
+  <div id="syncBanner"></div>
+  <div id="equityWarning"></div>
+
+  <div class="hero" id="hero"></div>
+
+  <section class="card" id="uploadCard">
+    <h2>Upload this month's sheet</h2>
+    <p class="sub">An Excel (.xlsx, .xls) or CSV file with one row per company: the name, the current market price (CMP), and the metrics you want to rank on.</p>
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Choose a spreadsheet file">
+      <div class="dz-title">Click to choose a file, or drag it here</div>
+      <div class="dz-sub">.xlsx, .xls or .csv</div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+    </div>
+    <div class="sample-row" id="metricNow"></div>
+    <div class="sample-row">No sheet handy? <button class="toggle-link" id="sampleBtn">Try it with example data</button> (preview only, nothing is saved).</div>
+    <div id="uploadFlow">
+      <div id="cfgBox"></div>
+      <div id="stepBox"></div>
+    </div>
+  </section>
+
+  <section class="card" id="positionsCard">
+    <div class="card-head">
+      <div>
+        <h2>Current positions</h2>
+        <p class="sub" id="positionsSub"></p>
+      </div>
+      <button class="btn secondary inline" id="openManualTrade">Record a manual trade</button>
+    </div>
+    <div id="pendingBanner"></div>
+    <div id="positionsBody"></div>
+  </section>
+
+  <section class="card" id="statsCard" hidden>
+    <h2>Portfolio statistics</h2>
+    <p class="sub">Profit and loss across everything this tool has traded for you, split by long and short.</p>
+    <div class="stats-grid" id="statsGrid"></div>
+    <div class="stat-note" id="statsNote"></div>
+  </section>
+
+  <section class="card" id="tradesCard" hidden>
+    <div class="card-head">
+      <div>
+        <h2>Trade ledger</h2>
+        <p class="sub">Every buy, sell, short and cover, from monthly rebalances and from trades you recorded by hand.</p>
+      </div>
+      <button class="btn secondary inline" id="exportTradesBtn">Export ledger (CSV)</button>
+    </div>
+    <div id="tradesBody"></div>
+  </section>
+
+  <section class="card" id="runsCard" hidden>
+    <h2>Monthly runs</h2>
+    <p class="sub">Each sheet this tool has ranked and rebalanced against, with the metric used.</p>
+    <div id="runsBody"></div>
+  </section>
+
+  <footer class="foot">Borrow fees on short positions are charged at the yearly rate in settings, counted by the day. Margin and dividends are not modelled. Brokerage and STT are included only while charges are switched on in settings. Runs in your browser; your data is saved to this page's own storage.</footer>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="overlay" id="settingsOverlay">
+  <div class="panel">
+    <h3>Strategy &amp; settings</h3>
+    <p class="sub">These apply to every upload from now on. The metric itself is chosen each month when you upload, and is remembered.</p>
+    <div class="grid-4 field-wrap">
+      <div><label class="field" for="setPerSide">Names per side</label><input type="number" id="setPerSide" min="1" max="50" step="1"></div>
+      <div><label class="field" for="setLongPct">Long book (% of capital)</label><input type="number" id="setLongPct" min="0" max="300" step="1"></div>
+      <div><label class="field" for="setShortPct">Short book (% of capital)</label><input type="number" id="setShortPct" min="0" max="300" step="1"></div>
+      <div><label class="field" for="setCurrency">Currency symbol</label><input type="text" id="setCurrency" maxlength="3"></div>
+    </div>
+    <div class="field-wrap">
+      <label class="field" for="setWhole">Share lots</label>
+      <select id="setWhole"><option value="1">Whole shares only</option><option value="0">Fractional shares allowed</option></select>
+    </div>
+    <div class="charges-box">
+      <div class="charges-head">
+        <div>
+          <div class="charges-title">Brokerage and STT</div>
+          <div class="charges-hint">When on, both are deducted from cash on every buy, sell, short and cover, including trades you record by hand, so returns are shown after charges. Trades already made are not recalculated.</div>
+        </div>
+        <button type="button" class="switch" id="setChargesOn" role="switch" aria-checked="false" aria-label="Apply brokerage and STT"><span class="track"></span><span class="state" id="setChargesState">Off</span></button>
+      </div>
+      <fieldset class="charge-fields" id="chargeFields" disabled>
+        <div class="charge-row">
+          <div class="name">Brokerage</div>
+          <div><label class="field" for="setBrokMode">Charged as</label><select id="setBrokMode"><option value="pct">% of trade value</option><option value="abs">Flat amount per trade</option></select></div>
+          <div><label class="field" for="setBrokVal" id="setBrokLabel">Rate (%)</label><input type="number" id="setBrokVal" min="0" step="any" inputmode="decimal"></div>
+        </div>
+        <div class="charge-row">
+          <div class="name">STT</div>
+          <div><label class="field" for="setSttMode">Charged as</label><select id="setSttMode"><option value="pct">% of trade value</option><option value="abs">Flat amount per trade</option></select></div>
+          <div><label class="field" for="setSttVal" id="setSttLabel">Rate (%)</label><input type="number" id="setSttVal" min="0" step="any" inputmode="decimal"></div>
+        </div>
+      </fieldset>
+      <p class="charge-example" id="chargeExample"></p>
+    </div>
+    <div class="charges-box">
+      <div class="charges-head">
+        <div>
+          <div class="charges-title">Borrow fee on short positions</div>
+          <div class="charges-hint">A yearly rate charged on the market value of each short, counted by the day it is held. It is deducted from cash when you cover, add to a short, or apply a rebalance, and accrued fees are already counted in portfolio value.</div>
+        </div>
+        <button type="button" class="switch" id="setBorrowOn" role="switch" aria-checked="true" aria-label="Charge a borrow fee on shorts"><span class="track"></span><span class="state" id="setBorrowState">On</span></button>
+      </div>
+      <fieldset class="charge-fields" id="borrowFields">
+        <div class="field-wrap"><label class="field" for="setBorrowRate">Borrow fee (% per year)</label><input type="number" id="setBorrowRate" min="0" max="100" step="any" inputmode="decimal"></div>
+      </fieldset>
+    </div>
+    <div class="banner">With 50% and 50% the two books are the same size, so the portfolio starts dollar neutral. Each name on a side gets an equal share of that side's allocation.</div>
+    <div class="banner">Short sale proceeds are held as cash, and portfolio value is cash plus long positions minus short positions. A position missing from a month's sheet is never closed automatically: it is flagged so you can exit it yourself and record the real price.</div>
+    <div class="close-row">
+      <button class="btn danger" id="resetPortfolioBtn">Reset all data</button>
+      <button class="btn secondary" id="closeSettings">Cancel</button>
+      <button class="btn" id="saveSettings">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="confirmOverlay">
+  <div class="panel">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p class="sub" id="confirmBody"></p>
+    <div class="close-row">
+      <button class="btn secondary" id="confirmCancel">Cancel</button>
+      <button class="btn danger" id="confirmOk">Yes, do it</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="manualOverlay">
+  <div class="panel">
+    <h3>Record a manual trade</h3>
+    <p class="sub">Use this for exits you made outside the tool, such as a position missing from your latest sheet, and for corrections. Enter the price you actually got.</p>
+    <div class="grid-2 field-wrap">
+      <div>
+        <label class="field" for="mtCompany">Company</label>
+        <input type="text" id="mtCompany" list="mtCompanyList" autocomplete="off" placeholder="Start typing">
+        <datalist id="mtCompanyList"></datalist>
+      </div>
+      <div>
+        <label class="field" for="mtAction">Action</label>
+        <select id="mtAction">
+          <option value="SELL">Sell (close a long)</option>
+          <option value="COVER">Cover (close a short)</option>
+          <option value="BUY">Buy (open or add to a long)</option>
+          <option value="SHORT">Short (open or add to a short)</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid-2 field-wrap">
+      <div><label class="field" for="mtShares">Shares</label><input type="number" id="mtShares" min="0" step="1"></div>
+      <div><label class="field" for="mtPrice">Price per share</label><input type="number" id="mtPrice" min="0" step="0.01"></div>
+    </div>
+    <div class="grid-2 field-wrap">
+      <div><label class="field" for="mtDate">Date</label><input type="date" id="mtDate"></div>
+      <div><label class="field" for="mtNote">Note (optional)</label><input type="text" id="mtNote" placeholder="e.g. exited, contract note"></div>
+    </div>
+    <p class="charge-example" id="mtChargeNote"></p>
+    <div class="close-row">
+      <button class="btn secondary" id="mtCancel">Cancel</button>
+      <button class="btn" id="mtSubmit">Record trade</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================= constants & state ======================= */
+var DB_DOC = "ls/portfolio";
+var LS_KEY = "ten_state_v1";
+var MAX_TRADES = 1000, MAX_RUNS = 36, MAX_DOC_CHARS = 230000;
+
+function defaultState(){
+  return {
+    v: 1, savedAt: 0,
+    settings: { metric: "", dir: "asc", skipNonPos: true, prefs: {}, perSide: 10, longPct: 50, shortPct: 50, currency: "₹", whole: true, cols: { name: "", cmp: "" }, charges: { on: false, brokerage: { mode: "pct", value: 0 }, stt: { mode: "pct", value: 0 } }, borrow: { on: true, rate: 2 } },
+    portfolio: { started: false, cash: 0, initialCapital: 0, startedDate: null, holdings: [], realized: { long: 0, short: 0 }, exits: { n: 0, wins: 0 }, fees: { brokerage: 0, stt: 0, borrow: 0 } },
+    trades: [],
+    runs: []
+  };
+}
+var state = defaultState();
+var dbNS = null, downloadsNS = null, cloudOk = true;
+var chain = Promise.resolve();
+var flow = { sheet: null, sample: false, screen: null };
+
+/* ======================= helpers ======================= */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+function pad2(n){ return n < 10 ? "0" + n : "" + n; }
+function todayISO(){ var d = new Date(); return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+function clone(o){ return JSON.parse(JSON.stringify(o)); }
+function money(n, dec){
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  dec = dec || 0;
+  var rounded = Number(Math.abs(n).toFixed(dec));
+  var s = rounded.toLocaleString("en-IN", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return (n < 0 && rounded !== 0 ? "-" : "") + state.settings.currency + s;
+}
+function signedMoney(n, dec){
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  var m = money(n, dec);
+  var zero = Number(Math.abs(n).toFixed(dec || 0)) === 0;
+  return (n > 0 && !zero ? "+" : "") + m;
+}
+function num(n, maxDec){ if (n === null || n === undefined || isNaN(n)) return "—"; return Number(n).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: maxDec === undefined ? 2 : maxDec }); }
+function pct(n, d){ if (n === null || n === undefined || isNaN(n)) return "—"; d = d === undefined ? 1 : d; var v = Number(n).toFixed(d); return (n > 0 && Number(v) !== 0 ? "+" : "") + v + "%"; }
+function sign(n){ return n > 0 ? "pos" : (n < 0 ? "neg" : ""); }
+function shareFmt(n){ return num(n, state.settings.whole ? 0 : 4); }
+function normKey(name){
+  return String(name === null || name === undefined ? "" : name).trim().toLowerCase()
+    .replace(/&/g, " and ").replace(/\./g, "").replace(/\blimited\b/g, "ltd").replace(/\bcorporation\b/g, "corp")
+    .replace(/[^a-z0-9]+/g, " ").trim();
+}
+function parseNum(v){
+  if (v === null || v === undefined || v === "") return NaN;
+  if (typeof v === "number") return isFinite(v) ? v : NaN;
+  var s = String(v).trim(); if (!s) return NaN;
+  var neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/[₹$€£,%\s]/g, "");
+  if (!/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(s)) return NaN;
+  var n = parseFloat(s);
+  return isNaN(n) ? NaN : (neg ? -n : n);
+}
+function toast(msg){
+  var t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._h); toast._h = setTimeout(function(){ t.classList.remove("show"); }, 3400);
+}
+function debounceSave(){ clearTimeout(debounceSave._h); debounceSave._h = setTimeout(persist, 500); }
+function findHolding(key){ var hs = state.portfolio.holdings; for (var i = 0; i < hs.length; i++) { if (hs[i].key === key) return hs[i]; } return null; }
+function sideWord(side){ return side === "LONG" ? "long" : "short"; }
+
+/* ======================= charges ======================= */
+function round2(x){ return Math.round(x * 100) / 100; }
+function normCharges(c){
+  var out = { on: false, brokerage: { mode: "pct", value: 0 }, stt: { mode: "pct", value: 0 } };
+  if (!c || typeof c !== "object") return out;
+  out.on = c.on === true;
+  ["brokerage", "stt"].forEach(function(k){
+    var x = c[k]; if (!x || typeof x !== "object") return;
+    out[k].mode = x.mode === "abs" ? "abs" : "pct";
+    var v = Number(x.value);
+    out[k].value = isFinite(v) && v > 0 ? (out[k].mode === "pct" ? Math.min(v, 100) : v) : 0;
+  });
+  return out;
+}
+function feeOf(part, value){
+  var v = part ? Number(part.value) : 0;
+  if (!(v > 0)) return 0;
+  return part.mode === "abs" ? v : value * v / 100;
+}
+// Charges on one trade of the given value. Brokerage and STT are each rounded to 2 decimals, as a contract note would show them.
+function chargesFor(value, cfg){
+  var c = cfg || state.settings.charges;
+  if (!c || !c.on || !(value > 0)) return { b: 0, s: 0, total: 0 };
+  var b = round2(feeOf(c.brokerage, value)), s = round2(feeOf(c.stt, value));
+  return { b: b, s: s, total: round2(b + s) };
+}
+function chargesShown(){
+  var f = state.portfolio.fees || {};
+  return !!(state.settings.charges && state.settings.charges.on) || (Number(f.brokerage) || 0) + (Number(f.stt) || 0) > 0 || borrowShown();
+}
+function feesPaid(){ var f = state.portfolio.fees || {}; return (Number(f.brokerage) || 0) + (Number(f.stt) || 0); }
+function tradeFee(x){ return (Number(x.fb) || 0) + (Number(x.fs) || 0) + (Number(x.bf) || 0); }
+function normBorrow(b){
+  if (!b || typeof b !== "object") return { on: true, rate: 2 };
+  var r = parseFloat(b.rate); r = isFinite(r) && r > 0 ? Math.min(r, 100) : 0;
+  return { on: b.on !== false, rate: r };
+}
+function daysBetween(a, b){
+  var pa = Date.parse(a + "T00:00:00Z"), pb = Date.parse(b + "T00:00:00Z");
+  return (isNaN(pa) || isNaN(pb)) ? 0 : Math.max(0, Math.round((pb - pa) / 86400000));
+}
+function borrowOn(){ var b = state.settings.borrow; return !!(b && b.on && b.rate > 0); }
+function accrualFor(h, px, asOf){
+  if (!borrowOn() || h.side !== "SHORT" || !h.bd) return 0;
+  return round2(h.shares * px * state.settings.borrow.rate / 100 * daysBetween(h.bd, asOf || todayISO()) / 365);
+}
+function borrowAccrued(){ var v = 0; state.portfolio.holdings.forEach(function(h){ v += accrualFor(h, h.lastCmp); }); return round2(v); }
+function settleBorrow(h, px, date){
+  var a = accrualFor(h, px, date), p = state.portfolio;
+  if (!h.bd || date > h.bd) h.bd = date;
+  if (a > 0) { p.cash -= a; p.fees.borrow = (Number(p.fees.borrow) || 0) + a; }
+  return a;
+}
+function dailyBorrow(){ if (!borrowOn()) return 0; var v = 0; state.portfolio.holdings.forEach(function(h){ if (h.side === "SHORT") v += h.shares * h.lastCmp; }); return v * state.settings.borrow.rate / 100 / 365; }
+function borrowPaid(){ return Number((state.portfolio.fees || {}).borrow) || 0; }
+function borrowShown(){ return borrowOn() || borrowPaid() > 0; }
+
+/* ======================= persistence ======================= */
+function normalize(raw){
+  var d = defaultState();
+  if (!raw || typeof raw !== "object") return d;
+  try { raw = clone(raw); } catch (e) { return d; }
+  var rs = raw.settings || {};
+  Object.keys(d.settings).forEach(function(k){ if (rs[k] !== undefined && rs[k] !== null) d.settings[k] = rs[k]; });
+  d.settings.cols = Object.assign({ name: "", cmp: "" }, rs.cols || {});
+  d.settings.prefs = (rs.prefs && typeof rs.prefs === "object") ? rs.prefs : {};
+  d.settings.charges = normCharges(rs.charges);
+  d.settings.borrow = normBorrow(rs.borrow);
+  var rp = raw.portfolio || {};
+  d.portfolio.started = !!rp.started;
+  d.portfolio.cash = Number(rp.cash) || 0;
+  d.portfolio.initialCapital = Number(rp.initialCapital) || 0;
+  d.portfolio.startedDate = rp.startedDate || null;
+  d.portfolio.holdings = Array.isArray(rp.holdings) ? rp.holdings.filter(function(h){ return h && h.key && (h.side === "LONG" || h.side === "SHORT"); }) : [];
+  d.portfolio.realized = Object.assign({ long: 0, short: 0 }, rp.realized || {});
+  d.portfolio.exits = Object.assign({ n: 0, wins: 0 }, rp.exits || {});
+  var rf = rp.fees || {};
+  d.portfolio.fees = { brokerage: Number(rf.brokerage) || 0, stt: Number(rf.stt) || 0, borrow: Number(rf.borrow) || 0 };
+  d.portfolio.holdings.forEach(function(h){ if (h.side === "SHORT" && !h.bd) h.bd = d.portfolio.startedDate || todayISO(); });
+  d.trades = Array.isArray(raw.trades) ? raw.trades : [];
+  d.runs = Array.isArray(raw.runs) ? raw.runs : [];
+  d.savedAt = Number(raw.savedAt) || 0;
+  return d;
+}
+function trimLedger(){
+  if (state.trades.length > MAX_TRADES) state.trades = state.trades.slice(state.trades.length - MAX_TRADES);
+  if (state.runs.length > MAX_RUNS) state.runs = state.runs.slice(state.runs.length - MAX_RUNS);
+  var guard = 0;
+  while (JSON.stringify(state).length > MAX_DOC_CHARS && state.trades.length > 50 && guard++ < 40) {
+    state.trades = state.trades.slice(Math.ceil(state.trades.length * 0.1));
+  }
+}
+async function doPersist(){
+  trimLedger();
+  state.savedAt = Date.now();
+  var doc = clone(state);
+  try { localStorage.setItem(LS_KEY, JSON.stringify(doc)); } catch (e) {}
+  if (!dbNS) { renderSyncBanner(); return; }
+  try { await dbNS.doc(DB_DOC).set(doc); cloudOk = true; }
+  catch (e) { cloudOk = false; if (window.console) console.error("db save failed", e); }
+  renderSyncBanner();
+}
+function persist(){ var p = chain.then(doPersist); chain = p.catch(function(){}); return p; }
+
+async function loadState(){
+  var local = null, remote = null, needSync = false;
+  try { var raw = localStorage.getItem(LS_KEY); if (raw) local = JSON.parse(raw); } catch (e) {}
+  if (dbNS) {
+    try { var snap = await dbNS.doc(DB_DOC).get(); if (snap.exists) remote = snap.data(); cloudOk = true; }
+    catch (e) { cloudOk = false; }
+  }
+  var pick = remote;
+  if (local && (!remote || (Number(local.savedAt) || 0) > (Number(remote.savedAt) || 0))) { pick = local; needSync = !!dbNS && cloudOk; }
+  state = normalize(pick);
+  if (needSync) persist();
+}
+function renderSyncBanner(){
+  var el = $("syncBanner");
+  if (!dbNS) el.innerHTML = '<div class="banner">Saving to this browser only, because account storage is not available here. Use the same browser each month and export the ledger now and then as a backup.</div>';
+  else if (!cloudOk) el.innerHTML = '<div class="banner warn">Could not reach account storage. Your latest changes are saved in this browser and will sync on the next successful save.</div>';
+  else el.innerHTML = "";
+}
+
+/* ======================= sheet reading ======================= */
+var ALIASES = {
+  name: ["company", "company name", "name", "stock", "stock name", "scrip", "security", "symbol", "ticker"],
+  cmp: ["cmp", "price", "current price", "ltp", "market price", "close price", "close", "cmp (rs)", "cmp rs", "cmp (₹)"],
+  metric: ["peg", "peg ratio", "pe", "pe ratio", "p/e", "roe", "roe %", "roe (%)"]
+};
+function guessCol(headers, field, remembered){
+  if (remembered && headers.indexOf(remembered) !== -1) return remembered;
+  var lower = headers.map(function(h){ return String(h).trim().toLowerCase(); }), list = ALIASES[field];
+  for (var i = 0; i < list.length; i++) { var ix = lower.indexOf(list[i]); if (ix !== -1) return headers[ix]; }
+  for (var j = 0; j < headers.length; j++) { for (var k = 0; k < list.length; k++) { if (lower[j].indexOf(list[k]) !== -1) return headers[j]; } }
+  return "";
+}
+var LOWER_RX = /( pe | peg | pb | ps | pcf | de | debt | beta | leverage | volatility | p\/e | p\/b | p\/s | p\/cf | d\/e | ev\/[a-z]+ )/;
+function guessDir(name){
+  var n = " " + String(name).toLowerCase().replace(/[^a-z0-9\/]+/g, " ").trim() + " ";
+  return (LOWER_RX.test(n) || /price to|debt to|debt equity/.test(n)) ? "asc" : "desc";
+}
+function parseSheet(ws){
+  var grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true, blankrows: false });
+  var hi = -1;
+  for (var i = 0; i < Math.min(grid.length, 30); i++) {
+    var cnt = 0; (grid[i] || []).forEach(function(c){ if (typeof c === "string" && c.trim() !== "") cnt++; });
+    if (cnt >= 3) { hi = i; break; }
+  }
+  if (hi < 0) return null;
+  var cols = [], seen = {};
+  (grid[hi] || []).forEach(function(h, idx){
+    if (h === null || h === undefined || String(h).trim() === "") return;
+    var nm = String(h).trim(), base = nm, c = 2;
+    while (seen[nm]) { nm = base + " (" + c++ + ")"; }
+    seen[nm] = true; cols.push({ idx: idx, name: nm });
+  });
+  var rows = [];
+  for (var r = hi + 1; r < grid.length; r++) {
+    var row = grid[r] || [], obj = {}, any = false;
+    cols.forEach(function(c){ var v = row[c.idx]; obj[c.name] = v === undefined ? null : v; if (v !== null && v !== undefined && v !== "") any = true; });
+    if (any) rows.push(obj);
+  }
+  return { headers: cols.map(function(c){ return c.name; }), rows: rows };
+}
+function numericColumns(headers, rows, exclude){
+  var out = [];
+  headers.forEach(function(h){
+    if (exclude.indexOf(h) !== -1) return;
+    var tot = 0, ok = 0;
+    rows.forEach(function(r){ var v = r[h]; if (v === null || v === undefined || v === "") return; tot++; if (!isNaN(parseNum(v))) ok++; });
+    if (tot > 0 && ok / tot >= 0.6) out.push(h);
+  });
+  return out;
+}
+
+/* ======================= ranking ======================= */
+function runScreen(rows, cfg){
+  var seen = {}, all = [], st = { total: 0, dupes: 0, noPrice: 0, noMetric: 0, nonPos: 0, blank: 0 };
+  rows.forEach(function(r){
+    var nm = r[cfg.name];
+    if (nm === null || nm === undefined || String(nm).trim() === "") { st.blank++; return; }
+    var key = normKey(nm);
+    if (!key) { st.blank++; return; }
+    st.total++;
+    if (seen[key]) { st.dupes++; return; }
+    seen[key] = true;
+    var cmp = parseNum(r[cfg.cmp]), m = parseNum(r[cfg.metric]);
+    var row = { key: key, name: String(nm).trim(), cmp: cmp, metric: m, status: "ok" };
+    if (isNaN(cmp) || cmp <= 0) { row.status = "noprice"; st.noPrice++; }
+    else if (isNaN(m)) { row.status = "nometric"; st.noMetric++; }
+    else if (cfg.skipNonPos && m <= 0) { row.status = "nonpos"; st.nonPos++; }
+    all.push(row);
+  });
+  var ranked = all.filter(function(r){ return r.status === "ok"; });
+  ranked.sort(function(a, b){
+    var d = cfg.dir === "asc" ? (a.metric - b.metric) : (b.metric - a.metric);
+    return d !== 0 ? d : a.name.localeCompare(b.name);
+  });
+  var n = Math.max(0, Math.min(cfg.perSide, Math.floor(ranked.length / 2)));
+  ranked.forEach(function(r, i){ r.rank = i + 1; r.side = i < n ? "LONG" : (i >= ranked.length - n ? "SHORT" : null); });
+  var longs = ranked.slice(0, n);
+  var shorts = n > 0 ? ranked.slice(ranked.length - n).reverse() : [];
+  var byKey = {};
+  all.forEach(function(r){ if (r.status !== "noprice") byKey[r.key] = r; });
+  return { rows: all, ranked: ranked, byKey: byKey, longs: longs, shorts: shorts, n: n, requested: cfg.perSide, stats: st, cfg: cfg };
+}
+function currentCfg(){
+  var s = state.settings;
+  return { name: s.cols.name, cmp: s.cols.cmp, metric: s.metric, dir: s.dir, skipNonPos: s.skipNonPos, perSide: s.perSide };
+}
+function bestWord(){ return state.settings.dir === "asc" ? "lowest" : "highest"; }
+function worstWord(){ return state.settings.dir === "asc" ? "highest" : "lowest"; }
+
+/* ======================= portfolio maths ======================= */
+function longValue(){ var v = 0; state.portfolio.holdings.forEach(function(h){ if (h.side === "LONG") v += h.shares * h.lastCmp; }); return v; }
+function shortValue(){ var v = 0; state.portfolio.holdings.forEach(function(h){ if (h.side === "SHORT") v += h.shares * h.lastCmp; }); return v; }
+function equity(){ return state.portfolio.cash + longValue() - shortValue() - borrowAccrued(); }
+function unrealized(side){
+  var v = 0;
+  state.portfolio.holdings.forEach(function(h){
+    if (side && h.side !== side) return;
+    v += (h.side === "LONG" ? (h.lastCmp - h.avgCost) : (h.avgCost - h.lastCmp)) * h.shares;
+  });
+  return v;
+}
+function holdingReturn(h){ return h.avgCost > 0 ? ((h.side === "LONG" ? h.lastCmp - h.avgCost : h.avgCost - h.lastCmp) / h.avgCost * 100) : 0; }
+
+function applyTrade(t){
+  var p = state.portfolio, key = normKey(t.name), h = findHolding(key);
+  var act = t.action, sh = Number(t.shares), px = Number(t.price), pl = null, bf = 0, tdate = t.date || todayISO();
+  if (!(sh > 0) || !(px > 0)) throw new Error("shares and price must be positive numbers");
+  var minUnit = state.settings.whole ? 1 : 0.0001;
+  if (act === "BUY" || act === "SHORT") {
+    var side = act === "BUY" ? "LONG" : "SHORT";
+    if (h && h.side !== side) throw new Error("you already hold " + h.name + " on the " + sideWord(h.side) + " side, close that first");
+    if (act === "SHORT" && h) bf = settleBorrow(h, h.lastCmp, tdate);
+    if (act === "BUY") p.cash -= sh * px; else p.cash += sh * px;
+    if (!h) p.holdings.push({ key: key, name: t.name, side: side, shares: sh, avgCost: px, lastCmp: px, realized: 0, pending: false });
+    if (!h) { var nh = p.holdings[p.holdings.length - 1]; if (side === "SHORT") nh.bd = tdate; }
+    else { var ns = h.shares + sh; h.avgCost = (h.shares * h.avgCost + sh * px) / ns; h.shares = ns; h.lastCmp = px; h.pending = false; }
+  } else if (act === "SELL" || act === "COVER") {
+    var need = act === "SELL" ? "LONG" : "SHORT";
+    if (!h || h.side !== need) throw new Error("there is no " + sideWord(need) + " position in " + t.name + " to " + (act === "SELL" ? "sell" : "cover"));
+    if (act === "COVER") bf = settleBorrow(h, px, tdate);
+    var q = Math.min(sh, h.shares);
+    pl = (act === "SELL" ? (px - h.avgCost) : (h.avgCost - px)) * q;
+    if (act === "SELL") p.cash += q * px; else p.cash -= q * px;
+    if (need === "LONG") p.realized.long += pl; else p.realized.short += pl;
+    h.realized = (h.realized || 0) + pl; h.shares -= q; h.lastCmp = px; h.pending = false; sh = q;
+    if (h.shares < minUnit) {
+      p.exits.n += 1; if (h.realized > 0) p.exits.wins += 1;
+      p.holdings = p.holdings.filter(function(x){ return x.key !== key; });
+    }
+  } else { throw new Error("unknown action " + act); }
+  var fee = chargesFor(sh * px);
+  if (fee.total > 0) {
+    if (!p.fees) p.fees = { brokerage: 0, stt: 0 };
+    p.cash -= fee.total; p.fees.brokerage += fee.b; p.fees.stt += fee.s;
+  }
+  var rec = { date: t.date, action: act, name: h ? h.name : t.name, shares: sh, price: px, pl: pl === null ? null : Math.round(pl * 100) / 100, why: t.why || "", src: t.src || "M", run: t.run || "" };
+  if (t.note) rec.note = t.note;
+  if (t.rank) rec.rk = t.rank;
+  if (fee.total > 0) { rec.fb = fee.b; rec.fs = fee.s; }
+  if (bf > 0) rec.bf = bf;
+  state.trades.push(rec);
+  return rec;
+}
+
+function sharesFor(notional, price){
+  var raw = notional / price;
+  return state.settings.whole ? Math.floor(raw + 1e-9) : Math.round(raw * 10000) / 10000;
+}
+function computeRebalance(screen, opts){
+  var s = state.settings, minUnit = s.whole ? 1 : 0.0001;
+  var cash = opts && opts.capital !== undefined ? opts.capital : state.portfolio.cash;
+  var holdings = opts && opts.capital !== undefined ? [] : state.portfolio.holdings;
+  var longMV = 0, shortMV = 0, pendLong = 0, pendShort = 0, pending = [];
+  holdings.forEach(function(h){
+    var row = screen.byKey[h.key], price = row ? row.cmp : h.lastCmp, mv = h.shares * price;
+    if (h.side === "LONG") longMV += mv; else shortMV += mv;
+    if (!row) {
+      if (h.side === "LONG") pendLong += mv; else pendShort += mv;
+      pending.push({ key: h.key, name: h.name, side: h.side, shares: h.shares, lastCmp: h.lastCmp, value: mv });
+    }
+  });
+  var eq = cash + longMV - shortMV;
+  var base = Math.max(0, eq - pendLong + pendShort);
+  var perLong = screen.n > 0 ? base * s.longPct / 100 / screen.n : 0;
+  var perShort = screen.n > 0 ? base * s.shortPct / 100 / screen.n : 0;
+  var target = {};
+  screen.longs.forEach(function(r, i){ target[r.key] = { side: "LONG", row: r, rank: i + 1 }; });
+  screen.shorts.forEach(function(r, i){ target[r.key] = { side: "SHORT", row: r, rank: i + 1 }; });
+  var closes = [], opens = [], holds = [], tooExp = [], held = {};
+  function mk(action, side, key, name, shares, price, why, rank){
+    var value = shares * price;
+    return { action: action, side: side, key: key, name: name, shares: shares, price: price, value: value, fee: action === "HOLD" ? 0 : chargesFor(value).total, why: why, rank: rank };
+  }
+  holdings.forEach(function(h){
+    held[h.key] = true;
+    var row = screen.byKey[h.key]; if (!row) return;
+    var t = target[h.key], closeAct = h.side === "LONG" ? "SELL" : "COVER", openAct = h.side === "LONG" ? "BUY" : "SHORT";
+    if (!t) { closes.push(mk(closeAct, h.side, h.key, h.name, h.shares, row.cmp, row.status === "ok" ? "drop" : "excl")); return; }
+    if (t.side === h.side) {
+      var ns = sharesFor(t.side === "LONG" ? perLong : perShort, row.cmp), delta = ns - h.shares;
+      if (Math.abs(delta) < minUnit) holds.push(mk("HOLD", h.side, h.key, h.name, h.shares, row.cmp, "hold", t.rank));
+      else if (delta > 0) opens.push(mk(openAct, h.side, h.key, h.name, delta, row.cmp, "add", t.rank));
+      else closes.push(mk(closeAct, h.side, h.key, h.name, -delta, row.cmp, "trim", t.rank));
+    } else {
+      closes.push(mk(closeAct, h.side, h.key, h.name, h.shares, row.cmp, "flip", t.rank));
+      var ns2 = sharesFor(t.side === "LONG" ? perLong : perShort, row.cmp);
+      if (ns2 > 0) opens.push(mk(t.side === "LONG" ? "BUY" : "SHORT", t.side, h.key, h.name, ns2, row.cmp, "flip", t.rank));
+      else tooExp.push({ name: h.name, cmp: row.cmp, side: t.side });
+    }
+  });
+  [["LONG", screen.longs], ["SHORT", screen.shorts]].forEach(function(pair){
+    pair[1].forEach(function(r, i){
+      if (held[r.key]) return;
+      var ns = sharesFor(pair[0] === "LONG" ? perLong : perShort, r.cmp);
+      if (ns > 0) opens.push(mk(pair[0] === "LONG" ? "BUY" : "SHORT", pair[0], r.key, r.name, ns, r.cmp, "open", i + 1));
+      else tooExp.push({ name: r.name, cmp: r.cmp, side: pair[0] });
+    });
+  });
+  opens.sort(function(a, b){ return a.side === b.side ? a.rank - b.rank : (a.side === "LONG" ? -1 : 1); });
+  var est = { b: 0, s: 0, total: 0 };
+  closes.concat(opens).forEach(function(a){ var f = chargesFor(a.value); est.b += f.b; est.s += f.s; est.total += f.total; });
+  est.b = round2(est.b); est.s = round2(est.s); est.total = round2(est.total);
+  return { actions: closes.concat(opens, holds), closes: closes, opens: opens, holds: holds, pending: pending, tooExpensive: tooExp, fees: est, equity: eq, base: base, perLong: perLong, perShort: perShort, n: screen.n, capital: opts && opts.capital };
+}
+function dirWords(dir){ return dir === "asc" ? { best: "lowest", worst: "highest" } : { best: "highest", worst: "lowest" }; }
+function tradeSide(action){ return (action === "BUY" || action === "SELL") ? "LONG" : "SHORT"; }
+function runCtx(runId){
+  for (var i = 0; i < state.runs.length; i++) { if (state.runs[i].id === runId) return { metric: state.runs[i].metric, dir: state.runs[i].dir, n: state.runs[i].n }; }
+  return undefined;
+}
+function whyText(a, ctx){
+  ctx = ctx || {};
+  var m = ctx.metric || state.settings.metric, w = dirWords(ctx.dir || state.settings.dir), n = ctx.n || state.settings.perSide;
+  switch (a.why) {
+    case "open": return "New " + sideWord(a.side) + (a.rank ? " (" + (a.side === "LONG" ? w.best : w.worst) + " " + m + ", #" + a.rank + ")" : "");
+    case "add": return "Top up to equal weight";
+    case "trim": return "Trim to equal weight";
+    case "drop": return "No longer in the top or bottom " + n;
+    case "excl": return "Metric missing or excluded this month";
+    case "flip": return (a.action === "SELL" || a.action === "COVER") ? ("Switching to the " + (a.action === "SELL" ? "short" : "long") + " side") : ("Switched from the " + (a.action === "SHORT" ? "long" : "short") + " side" + (a.rank ? " (#" + a.rank + ")" : ""));
+    case "hold": return "Already at target weight";
+    default: return a.note || "";
+  }
+}
+
+async function applyRebalance(rb, screen, ctx){
+  var backup = clone(state);
+  try {
+    var today = (ctx && ctx.date) || todayISO(), runId = String(Date.now());
+    if (ctx.initial) {
+      state.portfolio.cash = ctx.capital; state.portfolio.initialCapital = ctx.capital;
+      state.portfolio.holdings = []; state.portfolio.realized = { long: 0, short: 0 }; state.portfolio.exits = { n: 0, wins: 0 }; state.portfolio.fees = { brokerage: 0, stt: 0, borrow: 0 };
+    }
+    state.portfolio.holdings.forEach(function(h){
+      var row = screen.byKey[h.key];
+      if (h.side === "SHORT") settleBorrow(h, row ? row.cmp : h.lastCmp, today);
+      if (row) { h.lastCmp = row.cmp; h.pending = false; } else { h.pending = true; }
+    });
+    rb.actions.forEach(function(a){
+      if (a.action === "HOLD") return;
+      applyTrade({ date: today, action: a.action, name: a.name, shares: a.shares, price: a.price, why: a.why, rank: a.rank, src: "R", run: runId });
+    });
+    state.portfolio.started = true;
+    if (!state.portfolio.startedDate) state.portfolio.startedDate = today;
+    state.runs.push({
+      id: runId, date: today, total: screen.stats.total, ranked: screen.ranked.length, n: screen.n,
+      metric: state.settings.metric, dir: state.settings.dir, equity: rb.equity, pending: rb.pending.length,
+      longs: screen.longs.map(function(r){ return r.name; }), shorts: screen.shorts.map(function(r){ return r.name; })
+    });
+    await persist();
+  } catch (e) {
+    state = backup;
+    throw e;
+  }
+}
+
+/* ======================= rendering: summary, positions, stats ======================= */
+function statTile(label, valueHtml, cls, subHtml, small){
+  return '<div class="stat"><div class="label">' + label + '</div><div class="value' + (cls ? " " + cls : "") + (small ? " small" : "") + '">' + valueHtml + '</div>' + (subHtml ? '<div class="sub2">' + subHtml + '</div>' : "") + '</div>';
+}
+function renderAll(){
+  renderSyncBanner(); renderEquityWarning(); renderHero(); renderPositions(); renderStats(); renderTrades(); renderRuns();
+  var p = state.portfolio, s = state.settings;
+  $("asOfLabel").textContent = p.started ? (s.perSide + " per side · since " + p.startedDate) : (s.perSide + " per side");
+  $("openManualTrade").hidden = !p.started;
+  $("metricNow").textContent = s.metric ? "Currently ranking on " + s.metric + " (long the " + bestWord() + ", short the " + worstWord() + "). Upload a sheet to pick a different metric." : "Upload a sheet, then pick the metric to rank on.";
+}
+function renderEquityWarning(){
+  var el = $("equityWarning");
+  el.innerHTML = (state.portfolio.started && equity() <= 0) ? '<div class="banner bad">Portfolio value is zero or negative. Check your recent trades; short positions can lose more than the capital behind them.</div>' : "";
+}
+function renderHero(){
+  var h = $("hero"), p = state.portfolio, s = state.settings;
+  if (!p.started) {
+    h.innerHTML = statTile("Status", "Not started") + statTile("Positions", "0 long · 0 short") +
+      statTile("Ranking", s.metric ? esc(s.metric) + " (" + (s.dir === "asc" ? "long the lowest" : "long the highest") + ")" : "Chosen when you upload", "", "", true) +
+      statTile("Next step", "Upload a sheet", "", "", true);
+    return;
+  }
+  var eq = equity(), pl = eq - p.initialCapital, plPct = p.initialCapital > 0 ? pl / p.initialCapital * 100 : 0;
+  var nl = 0, ns = 0; p.holdings.forEach(function(x){ if (x.side === "LONG") nl++; else ns++; });
+  var net = longValue() - shortValue();
+  h.innerHTML = statTile("Portfolio value", money(eq)) + statTile("Total return", pct(plPct, 1), sign(pl), signedMoney(pl) + " since start" + (chargesShown() ? ", after charges" : "")) +
+    statTile("Positions", nl + " long · " + ns + " short", "", "", true) +
+    statTile("Net exposure", money(net), "", eq > 0 ? pct(net / eq * 100, 0).replace("+", "") + " of portfolio value" : "");
+}
+function bookHtml(side){
+  var hs = state.portfolio.holdings.filter(function(h){ return h.side === side; }).sort(function(a, b){ return b.shares * b.lastCmp - a.shares * a.lastCmp; });
+  var eq = equity(), mv = 0, pl = 0;
+  hs.forEach(function(h){ mv += h.shares * h.lastCmp; pl += (side === "LONG" ? h.lastCmp - h.avgCost : h.avgCost - h.lastCmp) * h.shares; });
+  var cls = side === "LONG" ? "long" : "short";
+  var brw = (side === "SHORT" && borrowOn()) ? borrowAccrued() : 0;
+  var html = '<div class="book"><div class="book-head"><div class="book-title"><span class="dot ' + cls + '"></span>' + (side === "LONG" ? "Long book" : "Short book") + '</div>' +
+    '<div class="book-sum">' + hs.length + ' position' + (hs.length === 1 ? "" : "s") + ' · ' + money(mv) + ' · P&amp;L <span class="' + sign(pl) + '">' + signedMoney(pl) + '</span>' + (side === "SHORT" && borrowOn() ? ' · borrow fee ' + state.settings.borrow.rate + '% a year, accrued ' + money(brw, 2) + ' (about ' + money(dailyBorrow(), 2) + ' a day)' : "") + '</div></div>';
+  if (!hs.length) return html + '<p class="empty-note">No ' + (side === "LONG" ? "long" : "short") + ' positions.</p></div>';
+  html += '<div class="table-scroll"><table><thead><tr><th class="name">Company</th><th>Shares</th><th>' + (side === "LONG" ? "Avg cost" : "Entry") + '</th><th>CMP</th><th>Value</th><th>Weight</th><th>P&amp;L</th><th>Return</th></tr></thead><tbody>';
+  hs.forEach(function(h){
+    var val = h.shares * h.lastCmp, w = eq > 0 ? val / eq * 100 : 0, hpl = (side === "LONG" ? h.lastCmp - h.avgCost : h.avgCost - h.lastCmp) * h.shares, r = holdingReturn(h);
+    html += '<tr class="' + (h.pending ? "pending-row" : "") + '"><td class="name">' + esc(h.name) +
+      (h.pending ? '<span class="badge-pending">needs manual ' + (side === "LONG" ? "exit" : "cover") + '</span> <button class="toggle-link" data-exit="' + esc(h.key) + '">Record it</button>' : "") +
+      '</td><td>' + shareFmt(h.shares) + '</td><td>' + money(h.avgCost, 2) + '</td><td>' + money(h.lastCmp, 2) + '</td><td>' + money(val) + '</td><td>' + w.toFixed(1) + '%</td>' +
+      '<td class="' + sign(hpl) + '">' + signedMoney(hpl) + '</td><td class="' + sign(r) + '">' + pct(r, 1) + '</td></tr>';
+  });
+  return html + '</tbody></table></div></div>';
+}
+function renderPositions(){
+  var body = $("positionsBody"), sub = $("positionsSub"), pend = $("pendingBanner"), p = state.portfolio;
+  if (!p.started) { sub.textContent = "Nothing here yet. Upload a sheet to build the first portfolio."; body.innerHTML = ""; pend.innerHTML = ""; return; }
+  sub.textContent = "Priced as of your latest upload, or the latest trade you recorded.";
+  var pendingOnes = p.holdings.filter(function(h){ return h.pending; });
+  pend.innerHTML = pendingOnes.length ? '<div class="banner warn">' + pendingOnes.length + ' position' + (pendingOnes.length === 1 ? " was" : "s were") + ' not in your last sheet and ' + (pendingOnes.length === 1 ? "was" : "were") + ' left untouched: ' +
+    pendingOnes.map(function(h){ return esc(h.name) + " (" + sideWord(h.side) + ")"; }).join(", ") + '. Close ' + (pendingOnes.length === 1 ? "it" : "them") + ' yourself, then record the trade with the price you got.</div>' : "";
+  body.innerHTML = bookHtml("LONG") + bookHtml("SHORT");
+}
+function renderStats(){
+  var card = $("statsCard"), p = state.portfolio;
+  if (!p.started) { card.hidden = true; return; }
+  card.hidden = false;
+  var eq = equity(), totalPL = eq - p.initialCapital, uL = unrealized("LONG"), uS = unrealized("SHORT"), rL = p.realized.long, rS = p.realized.short;
+  var totalPct = p.initialCapital > 0 ? totalPL / p.initialCapital * 100 : 0;
+  var lmv = longValue(), smv = shortValue();
+  var days = p.startedDate ? (Date.now() - new Date(p.startedDate + "T00:00:00").getTime()) / 86400000 : 0, cagr = null;
+  if (days >= 20 && p.initialCapital > 0 && eq > 0) cagr = (Math.pow(eq / p.initialCapital, 365.25 / days) - 1) * 100;
+  $("statsGrid").innerHTML =
+    statTile("Starting capital", money(p.initialCapital)) + statTile("Portfolio value", money(eq)) +
+    statTile("Total P&amp;L", signedMoney(totalPL), sign(totalPL), pct(totalPct, 1) + " since start" + (chargesShown() ? " · after charges" : "")) +
+    statTile("Long book P&amp;L", signedMoney(rL + uL), sign(rL + uL), "realised " + signedMoney(rL) + " · open " + signedMoney(uL)) +
+    statTile("Short book P&amp;L", signedMoney(rS + uS), sign(rS + uS), "realised " + signedMoney(rS) + " · open " + signedMoney(uS)) +
+    statTile("Realised P&amp;L", signedMoney(rL + rS), sign(rL + rS), p.exits.n + " closed position" + (p.exits.n === 1 ? "" : "s")) +
+    statTile("Gross exposure", money(lmv + smv), "", eq > 0 ? (((lmv + smv) / eq) * 100).toFixed(0) + "% of portfolio value" : "") +
+    statTile("Net exposure", money(lmv - smv), "", eq > 0 ? (((lmv - smv) / eq) * 100).toFixed(0) + "% of portfolio value" : "") +
+    statTile("Annualised return", cagr === null ? "—" : pct(cagr, 1), cagr === null ? "" : sign(cagr), cagr === null ? "too early to annualise" : "since start" + (chargesShown() ? ", after charges" : ""));
+  var parts = [];
+  if (chargesShown()) {
+    var acc = borrowAccrued(), bor = borrowPaid() + acc, paid = feesPaid() + bor, fb = Number(p.fees.brokerage) || 0, fs = Number(p.fees.stt) || 0;
+    var pctCap = p.initialCapital > 0 ? (paid / p.initialCapital * 100).toFixed(2) : "0.00";
+    if (borrowShown()) {
+      var rateTxt = borrowOn() ? state.settings.borrow.rate + "% a year, about " + money(dailyBorrow(), 2) + " a day on current shorts" : "switched off";
+      $("statsGrid").innerHTML +=
+        statTile("Brokerage and STT", money(feesPaid(), 2), "", "brokerage " + money(fb, 2) + " · STT " + money(fs, 2)) +
+        statTile("Borrow fees", money(bor, 2), "", "charged " + money(borrowPaid(), 2) + " · accruing " + money(acc, 2) + " · " + rateTxt) +
+        statTile("P&amp;L before charges", signedMoney(totalPL + paid), sign(totalPL + paid), "total P&amp;L plus all charges and fees (" + pctCap + "% of capital)");
+    } else {
+      $("statsGrid").innerHTML +=
+        statTile("Charges paid", money(paid, 2), "", "brokerage " + money(fb, 2) + " · STT " + money(fs, 2)) +
+        statTile("P&amp;L before charges", signedMoney(totalPL + paid), sign(totalPL + paid), "total P&amp;L plus charges paid") +
+        statTile("Charges as % of capital", pctCap + "%", "", "of starting capital");
+    }
+    parts.push("Book P&L and realised P&L above are before charges and borrow fees");
+  }
+  if (p.exits.n > 0) parts.push("Win rate " + Math.round(p.exits.wins / p.exits.n * 100) + "% across " + p.exits.n + " closed position" + (p.exits.n === 1 ? "" : "s"));
+  var best = null, worst = null;
+  p.holdings.forEach(function(h){ var r = holdingReturn(h); if (!best || r > best.r) best = { h: h, r: r }; if (!worst || r < worst.r) worst = { h: h, r: r }; });
+  if (best) parts.push("Best open position " + best.h.name + " (" + sideWord(best.h.side) + ") " + pct(best.r, 1));
+  if (worst) parts.push("Worst open position " + worst.h.name + " (" + sideWord(worst.h.side) + ") " + pct(worst.r, 1));
+  $("statsNote").textContent = parts.join("  ·  ");
+}
+function actionTag(a){ return '<span class="tag ' + a.toLowerCase() + '">' + a + '</span>'; }
+function tradesTable(list, withWhy, useRunCtx){
+  var showFee = list.some(function(x){ return tradeFee(x) > 0; });
+  var t = '<div class="table-scroll"><table><thead><tr><th>Date</th><th>Action</th><th class="name">Company</th><th>Shares</th><th>Price</th><th>Value</th>' + (showFee ? '<th>Charges</th>' : '') + '<th>Realised P&amp;L</th><th class="name">' + (withWhy ? "Why" : "Type") + '</th></tr></thead><tbody>';
+  list.forEach(function(x){
+    t += '<tr><td>' + esc(x.date) + '</td><td>' + actionTag(x.action) + '</td><td class="name">' + esc(x.name) + '</td><td>' + shareFmt(x.shares) + '</td><td>' + money(x.price, 2) + '</td><td>' + money(x.shares * x.price) + '</td>' +
+      (showFee ? '<td>' + (tradeFee(x) > 0 ? money(tradeFee(x), 2) : "—") + '</td>' : '') +
+      '<td class="' + sign(x.pl) + '">' + (x.pl === null || x.pl === undefined ? "—" : signedMoney(x.pl)) + '</td>' +
+      '<td class="' + (withWhy ? "reason" : "") + '">' + (withWhy ? esc(x.src === "M" ? (x.note || "Recorded by hand") : whyText({ why: x.why, action: x.action, side: tradeSide(x.action), rank: x.rk }, useRunCtx ? runCtx(x.run) : undefined)) : '<span class="tag manual">' + (x.src === "M" ? "Manual" : "Rebalance") + '</span>') + '</td></tr>';
+  });
+  return t + '</tbody></table></div>';
+}
+function renderTrades(){
+  var card = $("tradesCard"), body = $("tradesBody");
+  if (!state.trades.length) { card.hidden = true; return; }
+  card.hidden = false;
+  var indexed = state.trades.map(function(t, i){ return { t: t, i: i }; });
+  indexed.sort(function(a, b){ return a.t.date < b.t.date ? 1 : (a.t.date > b.t.date ? -1 : b.i - a.i); });
+  var sorted = indexed.map(function(x){ return x.t; }), LIMIT = 15;
+  var html = tradesTable(sorted.slice(0, LIMIT), false);
+  if (sorted.length > LIMIT) html += '<button class="toggle-link" id="toggleTrades" style="margin-top:10px;">Show all ' + sorted.length + ' trades</button><div id="allTrades" hidden style="margin-top:10px;"></div>';
+  body.innerHTML = html;
+  if (sorted.length > LIMIT) $("toggleTrades").onclick = function(){
+    var box = $("allTrades");
+    if (!box.hidden) { box.hidden = true; this.textContent = "Show all " + sorted.length + " trades"; return; }
+    box.innerHTML = tradesTable(sorted, false); box.hidden = false; this.textContent = "Hide full ledger";
+  };
+}
+function renderRuns(){
+  var card = $("runsCard"), body = $("runsBody");
+  if (!state.runs.length) { card.hidden = true; return; }
+  card.hidden = false;
+  var runs = state.runs.slice().reverse();
+  var html = '<div class="table-scroll"><table><thead><tr><th>Date</th><th class="name">Ranked on</th><th>Ranked</th><th>Per side</th><th>Trades</th><th>Needs manual exit</th><th>Portfolio value</th><th></th></tr></thead><tbody>';
+  runs.forEach(function(r, i){
+    var rt = state.trades.filter(function(t){ return t.run === r.id; });
+    html += '<tr><td>' + esc(r.date) + '</td><td class="name">' + esc(r.metric) + ' <span class="reason">(long the ' + (r.dir === "asc" ? "lowest" : "highest") + ')</span></td><td>' + r.ranked + ' of ' + r.total + '</td><td>' + r.n + '</td><td>' + rt.length + '</td><td>' + (r.pending || 0) + '</td><td>' + money(r.equity) + '</td>' +
+      '<td><button class="toggle-link" data-run="' + i + '">Details</button></td></tr>' +
+      '<tr data-detail="' + i + '" hidden><td colspan="8" style="padding:10px 12px;">' +
+      '<p class="reason" style="margin:0 0 8px;"><strong>Long:</strong> ' + esc((r.longs || []).join(", ") || "none") + '<br><strong>Short:</strong> ' + esc((r.shorts || []).join(", ") || "none") + '</p>' +
+      (rt.length ? tradesTable(rt, true, true) : '<p class="empty-note">The trades for this run are no longer stored.</p>') + '</td></tr>';
+  });
+  body.innerHTML = html + '</tbody></table></div>';
+  Array.prototype.forEach.call(body.querySelectorAll("[data-run]"), function(b){
+    b.onclick = function(){
+      var row = body.querySelector('[data-detail="' + this.getAttribute("data-run") + '"]');
+      row.hidden = !row.hidden; this.textContent = row.hidden ? "Details" : "Hide";
+    };
+  });
+}
+
+/* ======================= upload flow ======================= */
+function handleFile(file){
+  if (!file) return;
+  var isText = /\.(csv|txt)$/i.test(file.name || "");
+  var reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      var wb = isText ? XLSX.read(e.target.result, { type: "string" }) : XLSX.read(e.target.result, { type: "array" });
+      var parsed = parseSheet(wb.Sheets[wb.SheetNames[0]]);
+      if (!parsed || !parsed.rows.length) { toast("Could not find a header row and data rows in that file."); return; }
+      loadSheet(parsed, false, file.name);
+    } catch (err) { if (window.console) console.error(err); toast("Could not read that file. Is it a valid Excel or CSV file?"); }
+  };
+  reader.onerror = function(){ toast("Could not read that file."); };
+  if (isText) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+function makeSample(){
+  var a = ["Northwind", "Harbor", "Summit", "Cedar", "Ironbridge", "Lakeshore", "Bluefield", "Granite", "Maple", "Redwood", "Silverline", "Oakmont", "Riverstone", "Kestrel", "Alder", "Brightwater", "Copperfield", "Dunmore", "Eastgate", "Fairview"];
+  var b = ["Steel", "Foods", "Pharma", "Textiles", "Cement", "Logistics", "Power", "Chemicals", "Paints", "Motors"];
+  var seed = 11; function rnd(){ seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+  var rows = [];
+  for (var i = 0; i < 44; i++) {
+    var pe = 5 + rnd() * 32, peg = 0.3 + rnd() * 2.6;
+    if (i % 17 === 5) pe = -(2 + rnd() * 10);
+    if (i % 19 === 7) peg = -(0.2 + rnd());
+    rows.push({ "Company": a[i % 20] + " " + b[(i * 3 + Math.floor(i / 20)) % 10], "CMP": Math.round((40 + rnd() * 1800) * 100) / 100, "PE": Math.round(pe * 10) / 10, "PEG": Math.round(peg * 100) / 100, "ROE (%)": Math.round((4 + rnd() * 26) * 10) / 10, "D/E": Math.round(rnd() * 200) / 100 });
+  }
+  return { headers: ["Company", "CMP", "PE", "PEG", "ROE (%)", "D/E"], rows: rows };
+}
+function loadSheet(sheet, isSample, fileName){
+  flow.sheet = sheet; flow.sample = isSample; flow.screen = null;
+  var s = state.settings, h = sheet.headers;
+  s.cols.name = guessCol(h, "name", s.cols.name);
+  s.cols.cmp = guessCol(h, "cmp", s.cols.cmp);
+  var nums = numericColumns(h, sheet.rows, [s.cols.name, s.cols.cmp]);
+  if (nums.indexOf(s.metric) === -1) {
+    var g = guessCol(nums, "metric", ""); s.metric = g || nums[0] || "";
+    applyMetricPrefs();
+  }
+  renderConfigure(fileName);
+  rescreen();
+}
+function applyMetricPrefs(){
+  var s = state.settings, pr = s.prefs[s.metric];
+  if (pr) { s.dir = pr.dir; s.skipNonPos = !!pr.skip; }
+  else { s.dir = guessDir(s.metric); s.skipNonPos = s.dir === "asc"; }
+}
+function renderConfigure(fileName){
+  var box = $("cfgBox"), s = state.settings, h = flow.sheet.headers;
+  var nums = numericColumns(h, flow.sheet.rows, [s.cols.name, s.cols.cmp]);
+  var others = h.filter(function(x){ return nums.indexOf(x) === -1 && x !== s.cols.name && x !== s.cols.cmp; });
+  function opts(list, sel){ return list.map(function(x){ return '<option value="' + esc(x) + '"' + (x === sel ? " selected" : "") + '>' + esc(x) + '</option>'; }).join(""); }
+  var metricOpts = '<optgroup label="Numeric columns">' + opts(nums, s.metric) + '</optgroup>' + (others.length ? '<optgroup label="Other columns">' + opts(others, s.metric) + '</optgroup>' : "");
+  box.innerHTML =
+    '<div class="banner" style="margin-top:16px;">' + (flow.sample ? "Example data: 44 made-up companies. " : "") + 'Read ' + flow.sheet.rows.length + ' rows' + (fileName && !flow.sample ? ' from ' + esc(fileName) : "") + '. Pick the metric to rank on; the lists below update as you change it.</div>' +
+    '<div class="grid-4 field-wrap">' +
+      '<div><label class="field" for="cfgMetric">Rank companies on</label><select id="cfgMetric">' + metricOpts + '</select></div>' +
+      '<div><label class="field" for="cfgDir">Go long the</label><select id="cfgDir"><option value="asc"' + (s.dir === "asc" ? " selected" : "") + '>Lowest values (short the highest)</option><option value="desc"' + (s.dir === "desc" ? " selected" : "") + '>Highest values (short the lowest)</option></select></div>' +
+      '<div><label class="field" for="cfgName">Company column</label><select id="cfgName">' + opts(h, s.cols.name) + '</select></div>' +
+      '<div><label class="field" for="cfgCmp">CMP column</label><select id="cfgCmp">' + opts(h, s.cols.cmp) + '</select></div>' +
+    '</div>' +
+    '<div class="grid-4 field-wrap">' +
+      '<div><label class="field" for="cfgPer">Names per side</label><input type="number" id="cfgPer" min="1" max="50" step="1" value="' + s.perSide + '"></div>' +
+      '<div class="check"><input type="checkbox" id="cfgSkip"' + (s.skipNonPos ? " checked" : "") + '><label for="cfgSkip">Ignore values of zero or below <small>(a negative PE or PEG usually means losses, not a cheap stock)</small></label></div>' +
+    '</div>';
+  // handlers read state.settings when they run, so they stay correct even if state was restored after a failed save
+  $("cfgMetric").onchange = function(){ var c = state.settings; c.metric = this.value; applyMetricPrefs(); renderConfigure(fileName); rescreen(); debounceSave(); };
+  $("cfgDir").onchange = function(){ var c = state.settings; c.dir = this.value; c.prefs[c.metric] = { dir: c.dir, skip: c.skipNonPos }; rescreen(); debounceSave(); };
+  $("cfgSkip").onchange = function(){ var c = state.settings; c.skipNonPos = this.checked; c.prefs[c.metric] = { dir: c.dir, skip: c.skipNonPos }; rescreen(); debounceSave(); };
+  $("cfgPer").onchange = function(){ var c = state.settings; c.perSide = Math.max(1, Math.min(50, parseInt(this.value, 10) || 10)); this.value = c.perSide; rescreen(); debounceSave(); };
+  $("cfgName").onchange = function(){ var c = state.settings; c.cols.name = this.value; renderConfigure(fileName); rescreen(); debounceSave(); };
+  $("cfgCmp").onchange = function(){ var c = state.settings; c.cols.cmp = this.value; renderConfigure(fileName); rescreen(); debounceSave(); };
+}
+function rescreen(){
+  flow.screen = runScreen(flow.sheet.rows, currentCfg());
+  renderPreview();
+}
+function rankTable(list, side){
+  var m = esc(state.settings.metric);
+  var t = '<div class="table-scroll"><table><thead><tr><th>#</th><th class="name">Company</th><th>' + m + '</th><th>CMP</th></tr></thead><tbody>';
+  list.forEach(function(r, i){ t += '<tr class="sel-' + (side === "LONG" ? "long" : "short") + '"><td class="rank">' + (i + 1) + '</td><td class="name">' + esc(r.name) + '</td><td>' + num(r.metric, 2) + '</td><td>' + money(r.cmp, 2) + '</td></tr>'; });
+  return t + '</tbody></table></div>';
+}
+function renderPreview(){
+  $("cfgBox").hidden = false;
+  var sc = flow.screen, st = sc.stats, s = state.settings, box = $("stepBox");
+  var skipped = [];
+  if (st.noPrice) skipped.push(st.noPrice + " without a usable price");
+  if (st.noMetric) skipped.push(st.noMetric + " without a " + esc(s.metric) + " value");
+  if (st.nonPos) skipped.push(st.nonPos + " with " + esc(s.metric) + " of zero or below");
+  if (st.dupes) skipped.push(st.dupes + " duplicate name" + (st.dupes === 1 ? "" : "s"));
+  var html = '<div class="banner">' + st.total + ' companies read, ' + sc.ranked.length + ' ranked' + (skipped.length ? " (left out: " + skipped.join(", ") + ")" : "") + '.</div>';
+  if (sc.n === 0) {
+    html += '<div class="banner warn">Not enough companies with a usable ' + esc(s.metric) + ' and price to build both sides. Try another metric, or untick the zero-or-below filter.</div>' +
+      '<div class="btn-row"><button class="btn secondary" id="cancelBtn">Cancel</button></div>';
+    box.innerHTML = html; $("cancelBtn").onclick = resetFlow; return;
+  }
+  if (sc.n < sc.requested) html += '<div class="banner warn">Only ' + sc.ranked.length + ' companies could be ranked, so each side holds ' + sc.n + ' instead of ' + sc.requested + '.</div>';
+  html += '<h3 class="step"><span class="dot long"></span>Long: ' + bestWord() + ' ' + esc(s.metric) + '</h3>' + rankTable(sc.longs, "LONG") +
+    '<h3 class="step"><span class="dot short"></span>Short: ' + worstWord() + ' ' + esc(s.metric) + '</h3>' + rankTable(sc.shorts, "SHORT") +
+    '<p style="margin:12px 0 0;"><button class="toggle-link" id="toggleFull">Show the full ranking (' + sc.ranked.length + ' companies)</button></p><div id="fullRank" hidden style="margin-top:10px;"></div>';
+  html += '<div class="btn-row"><button class="btn" id="proceedBtn">' + (state.portfolio.started ? "Preview rebalance" : "Set up initial portfolio") + '</button><button class="btn secondary" id="cancelBtn">Cancel</button></div>';
+  box.innerHTML = html;
+  $("toggleFull").onclick = function(){
+    var fr = $("fullRank");
+    if (!fr.hidden) { fr.hidden = true; this.textContent = "Show the full ranking (" + sc.ranked.length + " companies)"; return; }
+    var t = '<div class="table-scroll"><table><thead><tr><th>#</th><th class="name">Company</th><th>' + esc(s.metric) + '</th><th>CMP</th><th>Position</th></tr></thead><tbody>';
+    sc.ranked.forEach(function(r){ t += '<tr><td class="rank">' + r.rank + '</td><td class="name">' + esc(r.name) + '</td><td>' + num(r.metric, 2) + '</td><td>' + money(r.cmp, 2) + '</td><td>' + (r.side === "LONG" ? '<span class="tag longside">Long</span>' : (r.side === "SHORT" ? '<span class="tag shortside">Short</span>' : '<span class="tag fail">None</span>')) + '</td></tr>'; });
+    sc.rows.filter(function(r){ return r.status !== "ok"; }).forEach(function(r){ t += '<tr><td class="rank">–</td><td class="name">' + esc(r.name) + '</td><td>' + (isNaN(r.metric) ? "—" : num(r.metric, 2)) + '</td><td>' + (isNaN(r.cmp) ? "—" : money(r.cmp, 2)) + '</td><td><span class="tag fail">' + (r.status === "noprice" ? "No price" : (r.status === "nometric" ? "No value" : "Zero or below")) + '</span></td></tr>'; });
+    fr.innerHTML = t + '</tbody></table></div>'; fr.hidden = false; this.textContent = "Hide the full ranking";
+  };
+  $("cancelBtn").onclick = resetFlow;
+  $("proceedBtn").onclick = function(){ if (state.portfolio.started) renderActions(computeRebalance(sc), { initial: false }); else renderCapital(); };
+}
+function renderCapital(){
+  $("cfgBox").hidden = false;
+  var s = state.settings, sc = flow.screen, box = $("stepBox");
+  box.innerHTML = '<div class="banner" style="margin-top:16px;">Setting up the first portfolio: ' + sc.n + ' long and ' + sc.n + ' short. Enter the total capital. ' + s.longPct + '% goes to the long book and ' + s.shortPct + '% to the short book, split equally across the names on each side.</div>' +
+    '<div class="grid-2 field-wrap"><div><label class="field" for="capInput">Starting capital (' + esc(s.currency) + ')</label><input type="number" id="capInput" min="0" step="1" placeholder="e.g. 1000000"' + (flow.sample ? ' value="1000000"' : "") + '></div></div>' +
+    '<div class="stat-note" id="capNote"></div>' +
+    '<div class="btn-row"><button class="btn" id="buildBtn">Preview first trades</button><button class="btn secondary" id="backBtn">Back</button></div>';
+  function note(){
+    var cap = parseFloat($("capInput").value);
+    $("capNote").textContent = cap > 0 ? "Each long gets about " + money(cap * s.longPct / 100 / sc.n) + " and each short about " + money(cap * s.shortPct / 100 / sc.n) + "." : "";
+  }
+  $("capInput").oninput = note; note();
+  $("backBtn").onclick = renderPreview;
+  $("buildBtn").onclick = function(){
+    var cap = parseFloat($("capInput").value);
+    if (!(cap > 0)) { toast("Enter how much you are investing."); return; }
+    renderActions(computeRebalance(sc, { capital: cap }), { initial: true, capital: cap });
+  };
+}
+function actionsTable(list, empty, showFee){
+  if (!list.length) return '<p class="empty-note">' + empty + '</p>';
+  var t = '<div class="table-scroll"><table><thead><tr><th>Action</th><th class="name">Company</th><th>Shares</th><th>Price</th><th>Value</th>' + (showFee ? '<th>Charges</th>' : '') + '<th class="name">Why</th></tr></thead><tbody>';
+  list.forEach(function(a){ t += '<tr><td>' + actionTag(a.action) + '</td><td class="name">' + esc(a.name) + '</td><td>' + shareFmt(a.shares) + '</td><td>' + money(a.price, 2) + '</td><td>' + money(a.value) + '</td>' + (showFee ? '<td>' + (a.fee > 0 ? money(a.fee, 2) : "—") + '</td>' : '') + '<td class="reason">' + esc(whyText(a)) + '</td></tr>'; });
+  return t + '</tbody></table></div>';
+}
+function renderActions(rb, ctx){
+  $("cfgBox").hidden = false;
+  var box = $("stepBox"), sc = flow.screen;
+  var html = '<div class="banner" style="margin-top:16px;">Portfolio value ' + money(rb.equity) + '. Each long gets ' + money(rb.perLong) + ' and each short ' + money(rb.perShort) + ' (' + rb.n + ' names per side).</div>';
+  if (flow.sample) html += '<div class="banner warn">Example data: this is a preview only. Nothing is saved or applied.</div>';
+  if (rb.pending.length) html += '<div class="banner warn">' + rb.pending.length + ' current position' + (rb.pending.length === 1 ? " is" : "s are") + ' not in this sheet and will be left untouched. Close ' + (rb.pending.length === 1 ? "it" : "them") + ' yourself and record the trade: ' + rb.pending.map(function(p){ return esc(p.name) + " (" + sideWord(p.side) + ")"; }).join(", ") + '.</div>';
+  if (rb.tooExpensive.length) html += '<div class="banner warn">' + rb.tooExpensive.length + ' name' + (rb.tooExpensive.length === 1 ? " costs" : "s cost") + ' more per share than its equal-weight slice, so ' + (rb.tooExpensive.length === 1 ? "it was" : "they were") + ' skipped: ' + rb.tooExpensive.map(function(p){ return esc(p.name) + " (" + sideWord(p.side) + ", " + money(p.cmp, 2) + ")"; }).join(", ") + '.</div>';
+  var on = state.settings.charges.on;
+  if (on) html += '<div class="banner">Estimated charges on these trades: <strong>' + money(rb.fees.total, 2) + '</strong> (brokerage ' + money(rb.fees.b, 2) + ', STT ' + money(rb.fees.s, 2) + '). They are deducted from cash when you apply.</div>';
+  if (borrowOn() && borrowAccrued() > 0) html += '<div class="banner">Borrow fee accrued on current short positions: <strong>about ' + money(borrowAccrued(), 2) + '</strong> at ' + state.settings.borrow.rate + '% a year. It is deducted from cash when you apply.</div>';
+  if (!flow.sample) html += '<div class="grid-2 field-wrap"><div><label class="field" for="rbDate">Rebalance date</label><input type="date" id="rbDate" value="' + todayISO() + '"></div></div><div class="stat-note">Borrow fees on shorts are counted by the days between dates, so set the date you actually traded. On the first day there is nothing to charge yet, and the fee builds up each day after that.</div>';
+  var closes = rb.closes, opens = rb.opens;
+  html += '<h3 class="step">Sell and cover</h3>' + actionsTable(closes, "Nothing to close.", on) +
+    '<h3 class="step">Buy and short</h3>' + actionsTable(opens, "Nothing to open.", on);
+  if (!ctx.initial) html += '<h3 class="step">Hold</h3>' + actionsTable(rb.holds, "No positions are already at target weight.", false);
+  html += '<div class="btn-row">' + (flow.sample ? "" : '<button class="btn" id="applyBtn">Apply &amp; save portfolio</button><button class="btn secondary" id="exportBtn">Export order sheet (CSV)</button>') + '<button class="btn secondary" id="backBtn2">Back</button>' + (flow.sample ? '<button class="btn secondary" id="doneBtn">Close example</button>' : "") + '</div>';
+  box.innerHTML = html;
+  $("backBtn2").onclick = function(){ if (ctx.initial) renderCapital(); else renderPreview(); };
+  if (flow.sample) { $("doneBtn").onclick = resetFlow; return; }
+  $("exportBtn").onclick = function(){
+    exportCSV(rb.actions.filter(function(a){ return a.action !== "HOLD"; }), "ten-orders-" + todayISO() + ".csv", "Action,Company,Shares,Price,Value,EstCharges,Why",
+      function(a){ return [a.action, a.name, a.shares, a.price.toFixed(2), a.value.toFixed(2), (a.fee || 0).toFixed(2), whyText(a)]; });
+  };
+  $("applyBtn").onclick = async function(){
+    var btn = this; btn.disabled = true; btn.textContent = "Saving…";
+    try { var rd = $("rbDate") && $("rbDate").value; await applyRebalance(rb, sc, Object.assign({}, ctx, rd ? { date: rd } : {})); }
+    catch (err) {
+      if (window.console) console.error(err);
+      toast("This did not save" + (err && err.message ? ": " + err.message : "") + ". Nothing was changed, please try again.");
+      btn.disabled = false; btn.textContent = "Apply & save portfolio"; return;
+    }
+    toast(dbNS && !cloudOk ? "Saved in this browser only. Account storage could not be reached." : (ctx.initial ? "Portfolio created." : "Rebalance applied and saved."));
+    resetFlow();
+    try { renderAll(); } catch (e2) { if (window.console) console.error(e2); toast("Saved. Reload the page if the screen does not update."); }
+  };
+}
+function exportCSV(items, filename, headerLine, rowFn){
+  var lines = [headerLine];
+  items.forEach(function(a){
+    lines.push(rowFn(a).map(function(v){ var s = String(v === null || v === undefined ? "" : v).replace(/"/g, '""'); return /[",\n]/.test(s) ? '"' + s + '"' : s; }).join(","));
+  });
+  if (!downloadsNS) { toast("File export is not available in this view."); return; }
+  downloadsNS.save({ filename: filename, data: lines.join("\n") }).then(function(){ toast("Saved " + filename); }).catch(function(e){ if (e && e.code === "declined") return; toast("Could not save the file here."); });
+}
+function resetFlow(){
+  flow = { sheet: null, sample: false, screen: null };
+  $("cfgBox").innerHTML = ""; $("cfgBox").hidden = false; $("stepBox").innerHTML = ""; $("fileInput").value = "";
+}
+
+/* ======================= wiring ======================= */
+var dz = $("dropzone");
+dz.addEventListener("click", function(){ $("fileInput").click(); });
+dz.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("fileInput").click(); } });
+$("fileInput").addEventListener("change", function(e){ if (e.target.files[0]) handleFile(e.target.files[0]); });
+dz.addEventListener("dragover", function(e){ e.preventDefault(); dz.classList.add("drag"); });
+["dragleave", "drop"].forEach(function(evt){ dz.addEventListener(evt, function(e){ e.preventDefault(); dz.classList.remove("drag"); }); });
+dz.addEventListener("drop", function(e){ if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+$("sampleBtn").onclick = function(){ resetFlow(); loadSheet(makeSample(), true, "example"); };
+
+function setBorrowUI(on){
+  $("setBorrowOn").setAttribute("aria-checked", on ? "true" : "false");
+  $("setBorrowState").textContent = on ? "On" : "Off";
+  $("borrowFields").disabled = !on;
+}
+$("setBorrowOn").onclick = function(){ setBorrowUI(this.getAttribute("aria-checked") !== "true"); };
+function setChargesUI(on){
+  $("setChargesOn").setAttribute("aria-checked", on ? "true" : "false");
+  $("setChargesState").textContent = on ? "On" : "Off";
+  $("chargeFields").disabled = !on;
+}
+function readChargesUI(){
+  function part(modeId, valId){
+    var mode = $(modeId).value === "abs" ? "abs" : "pct", v = parseFloat($(valId).value);
+    v = isFinite(v) && v > 0 ? v : 0;
+    if (mode === "pct") v = Math.min(v, 100);
+    return { mode: mode, value: v };
+  }
+  return { on: $("setChargesOn").getAttribute("aria-checked") === "true", brokerage: part("setBrokMode", "setBrokVal"), stt: part("setSttMode", "setSttVal") };
+}
+function refreshChargesUI(){
+  var cur = $("setCurrency").value || state.settings.currency;
+  $("setBrokLabel").textContent = $("setBrokMode").value === "abs" ? "Amount (" + cur + ")" : "Rate (%)";
+  $("setSttLabel").textContent = $("setSttMode").value === "abs" ? "Amount (" + cur + ")" : "Rate (%)";
+  var c = readChargesUI(), ex = $("chargeExample");
+  if (!c.on) { ex.textContent = "Charges are off, so nothing is deducted."; return; }
+  var f = chargesFor(100000, c);
+  if (f.total <= 0) { ex.textContent = "Charges are on, but both amounts are zero."; return; }
+  ex.textContent = "Example: a " + cur + "1,00,000 trade costs " + cur + num(f.total, 2) + " (brokerage " + cur + num(f.b, 2) + ", STT " + cur + num(f.s, 2) + ").";
+}
+$("setChargesOn").onclick = function(){ setChargesUI(this.getAttribute("aria-checked") !== "true"); refreshChargesUI(); };
+["setBrokMode", "setSttMode"].forEach(function(id){ $(id).onchange = refreshChargesUI; });
+["setBrokVal", "setSttVal", "setCurrency"].forEach(function(id){ $(id).oninput = refreshChargesUI; });
+$("openSettings").onclick = function(){
+  var s = state.settings, c = s.charges;
+  $("setPerSide").value = s.perSide; $("setLongPct").value = s.longPct; $("setShortPct").value = s.shortPct;
+  $("setCurrency").value = s.currency; $("setWhole").value = s.whole ? "1" : "0";
+  $("setBrokMode").value = c.brokerage.mode; $("setBrokVal").value = c.brokerage.value > 0 ? c.brokerage.value : "";
+  $("setSttMode").value = c.stt.mode; $("setSttVal").value = c.stt.value > 0 ? c.stt.value : "";
+  setChargesUI(c.on); refreshChargesUI();
+  setBorrowUI(s.borrow.on); $("setBorrowRate").value = s.borrow.rate;
+  $("settingsOverlay").classList.add("show");
+};
+$("closeSettings").onclick = function(){ $("settingsOverlay").classList.remove("show"); };
+$("settingsOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("show"); });
+$("saveSettings").onclick = async function(){
+  var s = state.settings;
+  s.perSide = Math.max(1, Math.min(50, parseInt($("setPerSide").value, 10) || 10));
+  var lp = parseFloat($("setLongPct").value), sp = parseFloat($("setShortPct").value);
+  s.longPct = isNaN(lp) ? 50 : Math.max(0, Math.min(300, lp)); s.shortPct = isNaN(sp) ? 50 : Math.max(0, Math.min(300, sp));
+  s.currency = $("setCurrency").value || "₹"; s.whole = $("setWhole").value === "1";
+  s.charges = normCharges(readChargesUI());
+  var wasOn = borrowOn(), rawRate = parseFloat($("setBorrowRate").value);
+  var nb = normBorrow({ on: $("setBorrowOn").getAttribute("aria-checked") === "true", rate: isFinite(rawRate) ? rawRate : 0 });
+  var today = todayISO();
+  if (wasOn) state.portfolio.holdings.forEach(function(h){ if (h.side === "SHORT") settleBorrow(h, h.lastCmp, today); });
+  s.borrow = nb;
+  state.portfolio.holdings.forEach(function(h){ if (h.side === "SHORT") h.bd = today; });
+  await persist(); $("settingsOverlay").classList.remove("show"); renderAll();
+  if (flow.sheet) { renderConfigure(); rescreen(); }
+  toast("Settings saved.");
+};
+function askConfirm(title, body, onOk){
+  $("confirmTitle").textContent = title; $("confirmBody").textContent = body; $("confirmOverlay").classList.add("show");
+  $("confirmOk").onclick = function(){ $("confirmOverlay").classList.remove("show"); onOk(); };
+  $("confirmCancel").onclick = function(){ $("confirmOverlay").classList.remove("show"); };
+}
+$("confirmOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("show"); });
+$("resetPortfolioBtn").onclick = function(){
+  askConfirm("Reset all data?", "This clears your positions, cash, trade ledger and monthly runs for good. Your settings are kept.", async function(){
+    var keep = state.settings; state = defaultState(); state.settings = keep;
+    await persist(); $("settingsOverlay").classList.remove("show"); resetFlow(); renderAll(); toast("Portfolio reset.");
+  });
+};
+
+function borrowNote(){
+  if (!borrowOn()) return "";
+  var act = $("mtAction").value, h = findHolding(normKey($("mtCompany").value.trim()));
+  if (!h || h.side !== "SHORT" || (act !== "COVER" && act !== "SHORT")) return "";
+  var px = parseFloat($("mtPrice").value); if (!(px > 0)) px = h.lastCmp;
+  var a = accrualFor(h, px, $("mtDate").value || todayISO());
+  return " Borrow fee accrued on this short so far: " + money(a, 2) + ", deducted from cash.";
+}
+function updateMtNote(){
+  var el = $("mtChargeNote"); updateMtNote0(el); var bn = borrowNote(); if (bn) el.textContent += bn;
+}
+["mtAction", "mtCompany", "mtDate"].forEach(function(id){ $(id).addEventListener("input", updateMtNote); $(id).addEventListener("change", updateMtNote); });
+function updateMtNote0(el){
+  var c = state.settings.charges;
+  if (!c.on) { el.textContent = "Charges are off, so nothing is deducted for this trade."; return; }
+  var sh = parseFloat($("mtShares").value), px = parseFloat($("mtPrice").value);
+  if (!(sh > 0) || !(px > 0)) { el.textContent = "Brokerage and STT will be deducted from cash using your settings."; return; }
+  var f = chargesFor(sh * px);
+  el.textContent = "Estimated charges: " + money(f.total, 2) + " (brokerage " + money(f.b, 2) + ", STT " + money(f.s, 2) + "), deducted from cash.";
+}
+["mtShares", "mtPrice"].forEach(function(id){ $(id).oninput = updateMtNote; });
+function openManual(pre){
+  pre = pre || {};
+  $("mtCompanyList").innerHTML = state.portfolio.holdings.map(function(h){ return '<option value="' + esc(h.name) + '"></option>'; }).join("");
+  $("mtCompany").value = pre.name || ""; $("mtAction").value = pre.action || "SELL";
+  $("mtShares").value = pre.shares || ""; $("mtPrice").value = ""; $("mtNote").value = ""; $("mtDate").value = todayISO();
+  updateMtNote();
+  $("manualOverlay").classList.add("show");
+}
+$("openManualTrade").onclick = function(){ openManual(); };
+$("positionsBody").addEventListener("click", function(e){
+  var b = e.target.closest ? e.target.closest("[data-exit]") : null; if (!b) return;
+  var h = findHolding(b.getAttribute("data-exit")); if (!h) return;
+  openManual({ name: h.name, action: h.side === "LONG" ? "SELL" : "COVER", shares: h.shares });
+});
+$("mtCancel").onclick = function(){ $("manualOverlay").classList.remove("show"); };
+$("manualOverlay").addEventListener("click", function(e){ if (e.target === this) this.classList.remove("show"); });
+$("mtSubmit").onclick = async function(){
+  var name = $("mtCompany").value.trim(), action = $("mtAction").value, shares = parseFloat($("mtShares").value), price = parseFloat($("mtPrice").value);
+  var date = $("mtDate").value || todayISO(), note = $("mtNote").value.trim();
+  if (!name) { toast("Enter a company name."); return; }
+  if (!(shares > 0)) { toast("Enter how many shares."); return; }
+  if (!(price > 0)) { toast("Enter the price per share."); return; }
+  if (state.settings.whole) shares = Math.round(shares);
+  if (!(shares > 0)) { toast("Enter at least one whole share."); return; }
+  var existing = findHolding(normKey(name));
+  if ((action === "SELL" || action === "COVER") && (!existing || existing.side !== (action === "SELL" ? "LONG" : "SHORT"))) { toast("You do not hold a " + (action === "SELL" ? "long" : "short") + " position in that company."); return; }
+  var backup = clone(state), rec;
+  try { rec = applyTrade({ date: date, action: action, name: name, shares: shares, price: price, src: "M", note: note }); await persist(); }
+  catch (err) { state = backup; if (window.console) console.error(err); toast("This did not save: " + (err && err.message ? err.message : "unknown error") + "."); return; }
+  toast(dbNS && !cloudOk ? "Saved in this browser only. Account storage could not be reached." : (rec.shares < shares ? "You held " + shareFmt(rec.shares) + " shares, so that many were closed." : "Trade recorded."));
+  $("manualOverlay").classList.remove("show"); renderAll();
+};
+$("exportTradesBtn").onclick = function(){
+  var sorted = state.trades.slice().sort(function(a, b){ return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
+  exportCSV(sorted, "ten-ledger-" + todayISO() + ".csv", "Date,Action,Company,Shares,Price,Value,Brokerage,STT,BorrowFee,RealisedPL,Source,Note",
+    function(t){ return [t.date, t.action, t.name, t.shares, t.price.toFixed(2), (t.shares * t.price).toFixed(2), (Number(t.fb) || 0).toFixed(2), (Number(t.fs) || 0).toFixed(2), (Number(t.bf) || 0).toFixed(2), t.pl === null || t.pl === undefined ? "" : t.pl.toFixed(2), t.src === "M" ? "Manual" : "Rebalance", t.src === "M" ? (t.note || "") : whyText({ why: t.why, action: t.action, side: tradeSide(t.action), rank: t.rk }, runCtx(t.run))]; });
+};
+
+/* ======================= boot ======================= */
+async function init(){
+  try {
+    if (window.claude && window.claude.use) {
+      dbNS = await window.claude.use("db");
+      downloadsNS = await window.claude.use("downloads");
+    }
+  } catch (e) { dbNS = null; downloadsNS = null; }
+  await loadState();
+  renderAll();
+}
+/*BOOT*/ init();
+
+})();
+</script>
+
+</body></html>
