@@ -100,7 +100,7 @@
   .toggle-link { background: none; border: none; color: var(--long); font-size: 13px; cursor: pointer; padding: 0; font-family: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
   label.field { display: block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 5px; }
-  select, input[type=text], input[type=number], input[type=date] { width: 100%; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); }
+  select, input[type=text], input[type=password], input[type=number], input[type=date] { width: 100%; font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper); color: var(--ink); }
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
   .grid-2 > *, .grid-4 > * { min-width: 0; }
@@ -302,10 +302,29 @@
     </div>
     <div class="banner">With 50% and 50% the two books are the same size, so the portfolio starts dollar neutral. Each name on a side gets an equal share of that side's allocation.</div>
     <div class="banner">Short sale proceeds are held as cash, and portfolio value is cash plus long positions minus short positions. A position missing from a month's sheet is never closed automatically: it is flagged so you can exit it yourself and record the real price.</div>
+    <div class="banner" id="accountRow" hidden>
+      <span id="accountText"></span>
+      <button class="toggle-link" id="signOutBtn" type="button" hidden>Sign out</button><button class="toggle-link" id="signInBtn" type="button" hidden>Sign in</button>
+    </div>
     <div class="close-row">
       <button class="btn danger" id="resetPortfolioBtn">Reset all data</button>
       <button class="btn secondary" id="closeSettings">Cancel</button>
       <button class="btn" id="saveSettings">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="authOverlay">
+  <div class="panel">
+    <h3>Save to your account</h3>
+    <p class="sub">Sign in, or create an account, and your portfolio is stored under it, so it is there on any browser or device and survives clearing site data. Only you can read it.</p>
+    <div class="field-wrap"><label class="field" for="authEmail">Email</label><input type="text" id="authEmail" autocomplete="email" inputmode="email"></div>
+    <div class="field-wrap"><label class="field" for="authPass">Password</label><input type="password" id="authPass" autocomplete="current-password"></div>
+    <p class="charge-example" id="authMsg" role="status"></p>
+    <div class="close-row">
+      <button class="btn secondary" id="authSkip" type="button">Not now</button>
+      <button class="btn secondary" id="authUp" type="button">Create account</button>
+      <button class="btn" id="authIn" type="button">Sign in</button>
     </div>
   </div>
 </div>
@@ -363,7 +382,10 @@
 
 /* ======================= constants & state ======================= */
 var DB_DOC = "ls/portfolio";
-var LS_KEY = "ten_state_v1";
+var LS_BASE = "ten_state_v1", LS_KEY = LS_BASE;
+/* Optional account storage for a copy hosted outside Claude (see README). Both values are public by design; the data is protected by row level security in the database. */
+var SUPABASE_URL = "", SUPABASE_ANON_KEY = "";
+var APP_ID = "ten";
 var MAX_TRADES = 1000, MAX_RUNS = 36, MAX_DOC_CHARS = 230000;
 
 function defaultState(){
@@ -484,6 +506,70 @@ function dailyBorrow(){ if (!borrowOn()) return 0; var v = 0; state.portfolio.ho
 function borrowPaid(){ return Number((state.portfolio.fees || {}).borrow) || 0; }
 function borrowShown(){ return borrowOn() || borrowPaid() > 0; }
 
+/* ======================= optional account storage (Supabase), only outside Claude ======================= */
+var sb = null, sbUser = null;
+function cloudConfigured(){ return !(window.claude && window.claude.use) && !!SUPABASE_URL && !!SUPABASE_ANON_KEY; }
+function loadScriptOnce(src){
+  return new Promise(function(resolve, reject){
+    var el = document.createElement("script"); el.src = src; el.onload = resolve; el.onerror = function(){ reject(new Error("could not load " + src)); };
+    document.head.appendChild(el);
+  });
+}
+async function initSupabase(){
+  if (!window.supabase) await loadScriptOnce("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js");
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  var r = await sb.auth.getSession();
+  sbUser = (r && r.data && r.data.session) ? r.data.session.user : null;
+  if (sbUser) useAccount(sbUser);
+}
+function useAccount(user){
+  sbUser = user; LS_KEY = LS_BASE + "_" + user.id; dbNS = makeSupaDb();
+  try { if (!localStorage.getItem(LS_KEY)) { var anon = localStorage.getItem(LS_BASE); if (anon) localStorage.setItem(LS_KEY, anon); } } catch (e) {}
+}
+function makeSupaDb(){
+  return { doc: function(){ return {
+    get: async function(){
+      var r = await sb.from("portfolios").select("data").eq("user_id", sbUser.id).eq("app", APP_ID).maybeSingle();
+      if (r.error) throw r.error;
+      return { exists: !!r.data, data: function(){ return r.data.data; } };
+    },
+    set: async function(doc){
+      var r = await sb.from("portfolios").upsert({ user_id: sbUser.id, app: APP_ID, data: doc, updated_at: new Date().toISOString() }, { onConflict: "user_id,app" });
+      if (r.error) throw r.error;
+    }
+  }; } };
+}
+function showAuth(msg){
+  $("authMsg").textContent = msg || ""; $("authOverlay").classList.add("show");
+}
+async function authSubmit(mode){
+  var email = $("authEmail").value.trim(), pw = $("authPass").value;
+  if (!email || !pw) { $("authMsg").textContent = "Enter your email and a password."; return; }
+  if (mode === "up" && pw.length < 6) { $("authMsg").textContent = "Use a password of at least 6 characters."; return; }
+  $("authMsg").textContent = mode === "up" ? "Creating your account…" : "Signing in…";
+  try {
+    var r = mode === "up" ? await sb.auth.signUp({ email: email, password: pw }) : await sb.auth.signInWithPassword({ email: email, password: pw });
+    if (r.error) { $("authMsg").textContent = r.error.message || "That did not work."; return; }
+    var user = r.data && (r.data.session ? r.data.session.user : null);
+    if (!user) { $("authMsg").textContent = "Account created. Check your email to confirm it, then sign in."; return; }
+    useAccount(user);
+    await loadState(); $("authOverlay").classList.remove("show"); $("authPass").value = ""; renderAll();
+    toast("Signed in. Your portfolio now saves to your account.");
+  } catch (e) { if (window.console) console.error(e); $("authMsg").textContent = "Could not reach the account service. Try again."; }
+}
+$("authIn").onclick = function(){ authSubmit("in"); };
+$("authUp").onclick = function(){ authSubmit("up"); };
+$("authSkip").onclick = function(){ $("authOverlay").classList.remove("show"); };
+$("authPass").addEventListener("keydown", function(e){ if (e.key === "Enter") authSubmit("in"); });
+$("signOutBtn").onclick = async function(){ try { await sb.auth.signOut(); } catch (e) {} location.reload(); };
+$("signInBtn").onclick = function(){ $("settingsOverlay").classList.remove("show"); showAuth(""); };
+function paintAccountRow(){
+  var row = $("accountRow"); row.hidden = !(cloudConfigured() && sb);
+  if (row.hidden) return;
+  $("accountText").textContent = sbUser ? "Signed in as " + sbUser.email + ". Your portfolio saves to your account." : "Not signed in. Your portfolio saves in this browser only.";
+  $("signOutBtn").hidden = !sbUser; $("signInBtn").hidden = !!sbUser;
+}
+
 /* ======================= persistence ======================= */
 function normalize(raw){
   var d = defaultState();
@@ -545,7 +631,8 @@ async function loadState(){
 }
 function renderSyncBanner(){
   var el = $("syncBanner");
-  if (!dbNS) el.innerHTML = '<div class="banner">Saving to this browser only, because account storage is not available here. Use the same browser each month and export the ledger now and then as a backup.</div>';
+  if (!dbNS && cloudConfigured() && sb) { el.innerHTML = '<div class="banner">Saving to this browser only. <button class="toggle-link" id="bannerSignIn" type="button">Sign in</button> to save your portfolio to your account and open it from any device.</div>'; $("bannerSignIn").onclick = function(){ showAuth(""); }; }
+  else if (!dbNS) el.innerHTML = '<div class="banner">Saving to this browser only, because account storage is not available here. Use the same browser each month and export the ledger now and then as a backup.</div>';
   else if (!cloudOk) el.innerHTML = '<div class="banner warn">Could not reach account storage. Your latest changes are saved in this browser and will sync on the next successful save.</div>';
   else el.innerHTML = "";
 }
@@ -1139,7 +1226,14 @@ function exportCSV(items, filename, headerLine, rowFn){
   items.forEach(function(a){
     lines.push(rowFn(a).map(function(v){ var s = String(v === null || v === undefined ? "" : v).replace(/"/g, '""'); return /[",\n]/.test(s) ? '"' + s + '"' : s; }).join(","));
   });
-  if (!downloadsNS) { toast("File export is not available in this view."); return; }
+  if (!downloadsNS) {
+    try {
+      var blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" }), url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 2000); toast("Saved " + filename);
+    } catch (e) { toast("Could not save the file here."); }
+    return;
+  }
   downloadsNS.save({ filename: filename, data: lines.join("\n") }).then(function(){ toast("Saved " + filename); }).catch(function(e){ if (e && e.code === "declined") return; toast("Could not save the file here."); });
 }
 function resetFlow(){
@@ -1198,6 +1292,7 @@ $("openSettings").onclick = function(){
   $("setSttMode").value = c.stt.mode; $("setSttVal").value = c.stt.value > 0 ? c.stt.value : "";
   setChargesUI(c.on); refreshChargesUI();
   setBorrowUI(s.borrow.on); $("setBorrowRate").value = s.borrow.rate;
+  paintAccountRow();
   $("settingsOverlay").classList.add("show");
 };
 $("closeSettings").onclick = function(){ $("settingsOverlay").classList.remove("show"); };
@@ -1299,8 +1394,12 @@ async function init(){
       downloadsNS = await window.claude.use("downloads");
     }
   } catch (e) { dbNS = null; downloadsNS = null; }
+  var cloudProblem = false;
+  if (cloudConfigured()) { try { await initSupabase(); } catch (e) { if (window.console) console.error(e); sb = null; cloudProblem = true; } }
   await loadState();
   renderAll();
+  if (cloudProblem) toast("Account storage could not be reached, so this session saves in this browser only.");
+  else if (sb && !sbUser) showAuth("");
 }
 /* theme: follows the device until the toggle is used, then remembers the choice in this browser */
 function currentTheme(){
